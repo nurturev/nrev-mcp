@@ -1,0 +1,10 @@
+{
+  "name": "nrev-workflows",
+  "version": "0.1.0",
+  "description": "Build, debug, and operate nRev workflows from Claude — 27 task-oriented MCP tools plus domain skills ported from the internal workflow-builder agent. Auth via per-user JWT, no secrets bundled.",
+  "author": {
+    "name": "NurtureV"
+  },
+  "homepage": "https://github.com/nurturev-dev/nrev-mcp",
+  "keywords": ["nrev", "workflow", "gtm", "mcp"]
+}

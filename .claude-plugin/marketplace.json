@@ -1,0 +1,17 @@
+{
+  "name": "nrev",
+  "owner": {
+    "name": "NurtureV"
+  },
+  "metadata": {
+    "description": "NurtureV's Claude plugins: build and operate nRev workflows and tables from any Claude surface.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "nrev-workflows",
+      "source": "./plugins/nrev-workflows",
+      "description": "Build, debug, and operate nRev workflows — MCP tools + domain skills."
+    }
+  ]
+}
