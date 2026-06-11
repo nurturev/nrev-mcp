@@ -149,8 +149,23 @@ def search_plays(query: Optional[str] = None, limit: int = 10) -> dict:
     nodes manually.
 
     To instantiate one, call create_workflow(from_play_id=...). Returns play
-    summaries (id, name, description, categories).
+    summaries (playId, name, description, categories, playbook).
     """
-    raw = api.list_plays(search=query, limit=limit)
-    data = raw.get("data") if isinstance(raw, dict) else raw
-    return {"plays": data or []}
+    # The catalog is served by GET /playbooks, which groups plays into
+    # playbooks and embeds each playbook's plays inline. Flatten back to a
+    # single list of plays (the unit create_workflow/summon operates on),
+    # tagging each with its parent playbook for context and de-duping plays
+    # that appear in more than one playbook.
+    raw = api.list_playbooks(search=query, limit=limit)
+    playbooks = raw.get("data") if isinstance(raw, dict) else (raw or [])
+    plays: list[dict] = []
+    seen: set[str] = set()
+    for pb in playbooks or []:
+        pb_name = pb.get("name")
+        for play in pb.get("plays") or []:
+            pid = play.get("playId")
+            if pid in seen:
+                continue
+            seen.add(pid)
+            plays.append({**play, "playbook": pb_name})
+    return {"plays": plays}

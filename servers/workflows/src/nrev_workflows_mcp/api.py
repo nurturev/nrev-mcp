@@ -266,13 +266,31 @@ def get_node_preview(
 # ── Plays (workflow templates) ───────────────────────────────────────────────
 
 
-def list_plays(search: Optional[str] = None, limit: int = 10, offset: int = 0) -> dict:
-    """GET /plays/multi — UNVERIFIED param names (taken from workflow_studio
-    route signature: search + pagination)."""
-    params: dict = {"limit": int(limit), "skip": int(offset)}
+def list_playbooks(
+    search: Optional[str] = None,
+    limit: int = 10,
+    offset: int = 0,
+    categories: Optional[str] = None,
+) -> dict:
+    """GET /playbooks — the published play catalog, grouped into playbooks.
+
+    Each item in the returned `data` list is a playbook carrying a nested
+    `plays` array (each play has playId/name/description/categories), plus a
+    `meta` block with pagination. This is the endpoint the web app uses for
+    play search/listing.
+
+    Replaces the former GET /plays/multi, which 500s server-side for every
+    input (Postgres 42P10: "for SELECT DISTINCT, ORDER BY expressions must
+    appear in select list"). Verified against production 2026-06-11.
+
+    `categories` is an optional comma-separated list of category ids — see
+    GET /play-categories for the id↔name mapping (e.g. 3 = Sales)."""
+    params: dict = {"skip": int(offset), "limit": int(limit)}
     if search:
         params["search"] = search
-    return request("GET", "/plays/multi", params=params)
+    if categories:
+        params["categories"] = categories
+    return request("GET", "/playbooks", params=params)
 
 
 def summon_play(play_id: str) -> dict:
