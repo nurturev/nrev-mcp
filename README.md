@@ -22,7 +22,7 @@ nrev-mcp/
 │       │   ├── tables_api.py         # tables service REST wrappers
 │       │   ├── shapes.py             # envelope construction + edit_workflow op engine
 │       │   ├── projections.py        # compact views of large API payloads
-│       │   └── tools_*.py            # 27 MCP tools in 5 modules
+│       │   └── tools_*.py            # 30 MCP tools in 5 modules
 │       └── tests/                    # pure-logic unit tests (no network)
 ├── plugins/
 │   └── nrev-workflows/               # Claude plugin: MCP config + 8 skills
@@ -42,7 +42,7 @@ nrev-mcp/
 ```
 
 Prereqs: Python 3.10+ and [uv](https://docs.astral.sh/uv/). Restart Claude
-Code after install; `/mcp` should show `nrev-workflows` with 27 tools.
+Code after install; `/mcp` should show `nrev-workflows` with 30 tools.
 
 First use, once per session: grab a JWT from the platform web app (DevTools →
 Network → `Authorization` header) and tell Claude *"set my nrev JWT to

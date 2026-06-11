@@ -94,6 +94,40 @@ def create_workflow(
 
 
 @mcp.tool()
+def set_workflow_live(workflow_id: str, live: bool = True, wait: bool = True) -> dict:
+    """Publish a workflow live — or take it offline. This is the "go live"
+    toggle the web app exposes; once live, the workflow's triggers/listeners
+    actually run.
+
+    - live=True  → promote the workflow to live
+    - live=False → take it offline
+
+    By default (wait=True) the call blocks until the platform finishes
+    promoting and returns the live workflow. Set wait=False to fire-and-forget:
+    you get back {request_id, status:"pending"} — poll get_workflow_live_status
+    to confirm it went live.
+
+    A workflow must pass validation before it can go live — run
+    validate_workflow first if you've been editing it.
+    """
+    if wait:
+        return api.publish_workflow_live(workflow_id, toggle_live=live, async_=False)
+    res = api.publish_workflow_live(workflow_id, toggle_live=live, async_=True)
+    req_id = res.get("requestId") if isinstance(res, dict) else None
+    if req_id:
+        return {"request_id": req_id, "status": "pending"}
+    return res
+
+
+@mcp.tool()
+def get_workflow_live_status(workflow_id: str, request_id: str) -> dict:
+    """Poll the result of a fire-and-forget set_workflow_live(wait=False) call.
+    Pass the request_id it returned. Reports {status, ...} and, once finished,
+    the live workflow (or an error)."""
+    return api.workflow_live_status(workflow_id, request_id)
+
+
+@mcp.tool()
 def edit_workflow(workflow_id: str, operations: list[dict]) -> dict:
     """Apply a batch of graph mutations to a workflow in ONE round trip, then
     validate. Use this for all structural changes (use update_node_settings
