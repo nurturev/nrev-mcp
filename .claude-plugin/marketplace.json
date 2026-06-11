@@ -6,7 +6,7 @@
   "plugins": [
     {
       "name": "nrev-workflows",
-      "description": "Build, debug, and operate nRev workflows — 27 task-oriented MCP tools plus domain skills ported from the internal workflow-builder agent. Per-user JWT auth, no secrets bundled.",
+      "description": "Build, debug, and operate nRev workflows — 30 task-oriented MCP tools plus domain skills ported from the internal workflow-builder agent. Per-user JWT auth, no secrets bundled.",
       "source": "./plugins/nrev-workflows",
       "category": "productivity",
       "keywords": ["nrev", "workflow", "gtm", "mcp"],

@@ -300,6 +300,37 @@ def summon_play(play_id: str) -> dict:
     return request("POST", f"/plays/{play_id}/summon", json_body={})
 
 
+# ── Live publish (the "go live" toggle) ──────────────────────────────────────
+
+
+def publish_workflow_live(workflow_id: str, toggle_live: bool = True, async_: bool = False) -> dict:
+    """POST /live/workflow/{workflow_id}/publish — promote a workflow to live
+    (toggle_live=True) or take it offline (toggle_live=False).
+
+    Synchronous (async_=False, default): blocks until promotion finishes and
+    returns {workflow, gracePeriodSeconds}. Asynchronous (async_=True): returns
+    {requestId} immediately — poll workflow_live_status() for completion.
+    Schema verified against the production OpenAPI contract 2026-06-11."""
+    params = {"async": "true"} if async_ else None
+    return request(
+        "POST",
+        f"/live/workflow/{workflow_id}/publish",
+        json_body={"toggleLive": bool(toggle_live)},
+        params=params,
+    )
+
+
+def workflow_live_status(workflow_id: str, request_id: str) -> dict:
+    """GET /live/workflow/{workflow_id}/publish/status — poll an async live
+    publish started with publish_workflow_live(async_=True). Returns
+    {status, requestId, workflow?, gracePeriodSeconds?, error?}."""
+    return request(
+        "GET",
+        f"/live/workflow/{workflow_id}/publish/status",
+        params={"requestId": request_id},
+    )
+
+
 # ── Workflow variables ───────────────────────────────────────────────────────
 # Router prefix verified in workflow_studio: /workflow/{workflow_id}/variables
 
