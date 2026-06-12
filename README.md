@@ -22,12 +22,13 @@ nrev-mcp/
 │       │   ├── tables_api.py         # tables service REST wrappers
 │       │   ├── shapes.py             # envelope construction + edit_workflow op engine
 │       │   ├── projections.py        # compact views of large API payloads
-│       │   └── tools_*.py            # 30 MCP tools in 5 modules
+│       │   └── tools_*.py            # 32 MCP tools in 5 modules
 │       └── tests/                    # pure-logic unit tests (no network)
 ├── plugins/
-│   └── nrev-workflows/               # Claude plugin: MCP config + 8 skills
+│   └── nrev-workflows/               # Claude plugin: MCP config + 10 skills
 │       ├── .mcp.json                 # launches bin/run-mcp.sh (stdio via uv)
 │       └── skills/                   # building-workflows, node-settings,
+│                                     # workflow-examples, troubleshooting,
 │                                     # list-building, qualification…,
 │                                     # research, content-generation,
 │                                     # gtm-automations, nomination
@@ -42,7 +43,7 @@ nrev-mcp/
 ```
 
 Prereqs: Python 3.10+ and [uv](https://docs.astral.sh/uv/). Restart Claude
-Code after install; `/mcp` should show `nrev-workflows` with 30 tools.
+Code after install; `/mcp` should show `nrev-workflows` with 32 tools.
 
 First use, once per session: grab a JWT from the platform web app (DevTools →
 Network → `Authorization` header) and tell Claude *"set my nrev JWT to
@@ -59,6 +60,29 @@ The launcher prefers `servers/workflows` from the repo checkout, falling back
 to the bundled copy under `plugins/nrev-workflows/mcp/` (created by
 `scripts/sync-plugin.sh` — run it before tagging a release).
 
+## Versioning & releases
+
+The authoritative version for **Claude Code** update detection is the `version`
+in `plugins/nrev-workflows/.claude-plugin/plugin.json` — it wins over the
+marketplace entry, and `/plugin update` does a semver comparison against it
+(strict `MAJOR.MINOR.PATCH`, no leading `v`). **Claude Cowork** instead tracks
+the git commit of the synced repo, so a fresh tagged commit is what it picks up;
+the version field is informational there. The bundled MCP server's
+`pyproject.toml` version is invisible to Claude Code — kept aligned only for
+tidiness / eventual PyPI publish.
+
+To cut a release, bump all four version fields in lockstep and tag:
+
+```
+scripts/bump-version.sh 0.3.0     # plugin.json + marketplace.json + pyproject, then re-syncs bundle
+# update CHANGELOG.md
+git commit -am "Release 0.3.0" && git tag v0.3.0 && git push --follow-tags
+```
+
+Never hand-edit one version field alone — divergence between plugin.json and
+the marketplace entry is silent (plugin.json wins). The script is the single
+entry point.
+
 ## Configuration
 
 | Env var | Default | Purpose |
@@ -69,17 +93,24 @@ to the bundled copy under `plugins/nrev-workflows/mcp/` (created by
 | `NREV_TIMEOUT` | `60` | HTTP timeout (seconds) |
 | `NREV_DOWNLOAD_DIR` | `~/.nrev-mcp/downloads` | download_node_output target |
 
-## Tool surface (27)
+## Tool surface (32)
 
 | Group | Tools |
 |---|---|
 | Auth | `set_jwt`, `get_auth_status` |
-| Discovery | `search_nodes`, `get_node_type`, `get_field_options`, `list_connections`, `search_plays` |
-| Workflows | `list_workflows`, `get_workflow`, `create_workflow`, `edit_workflow` (batched graph ops), `update_node_settings`, `manage_variables` |
-| Execution | `validate_workflow`, `run_workflow`, `run_node`, `get_execution` (with wait), `stop_execution`, `get_node_output`, `download_node_output` |
+| Discovery | `search_nodes`, `find_node` (intent-ranked search), `get_node_type`, `describe_node` (schema + live options in one call), `get_field_options`, `list_connections`, `search_plays` |
+| Workflows | `list_workflows`, `get_workflow`, `create_workflow`, `edit_workflow` (batched graph ops), `update_node_settings`, `manage_variables`, `set_workflow_live`, `get_workflow_live_status` |
+| Execution | `validate_workflow`, `estimate_run_cost`, `run_workflow` (spend-gated), `run_node`, `get_execution` (with wait), `stop_execution`, `get_node_output`, `download_node_output` |
 | Tables | `list_tables`, `get_table`, `create_table`, `update_table`, `delete_table`, `get_table_rows`, `add_table_rows` |
 
 Design notes:
+- `find_node` ranks the whole catalog against a natural-language intent
+  (synonym-aware lexical scoring in `ranking.py`) so node discovery doesn't
+  depend on guessing the exact name; `describe_node` returns a node's settings
+  schema **and** pre-fetches every dropdown's live options in one round trip.
+- `run_workflow` refuses a real-credit run (any node not in test mode) without
+  `confirm=true`, returning an `estimate_run_cost` breakdown so spend is
+  surfaced before it happens.
 - `edit_workflow` replaces the predecessor's 8 mutation micro-tools with one
   batched operation engine (`servers/workflows/src/nrev_workflows_mcp/shapes.py`)
   that enforces the platform invariants: single-input rule, Magic Node df1–df5
