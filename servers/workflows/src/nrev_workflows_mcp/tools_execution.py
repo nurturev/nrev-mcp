@@ -23,17 +23,59 @@ def validate_workflow(workflow_id: str) -> dict:
     return projections.scan_validation(api.get_workflow(workflow_id))
 
 
+def _live_nodes(wf: dict) -> list[dict]:
+    """Blocks NOT in test mode — the ones that spend real credits on a run."""
+    return [b for b in (wf.get("blocks") or []) if not projections._pick(b, "isTestMode", "is_test_mode", default=False)]
+
+
 @mcp.tool()
-def run_workflow(workflow_id: str, input_data: Optional[dict] = None) -> dict:
+def estimate_run_cost(workflow_id: str, rows: int = 100) -> dict:
+    """Estimate the credit cost of a full (non-test) run BEFORE launching one.
+    Sums each node's per-row credit cost over an assumed `rows` input. The
+    figure is an upper bound — filters, dedup, and qualification splits shrink
+    the row count downstream, so actual spend is lower. Returns the total,
+    a per-node breakdown, and the top cost drivers. Show this to the user before
+    a full run.
+    """
+    wf = api.get_workflow(workflow_id)
+    return projections.estimate_cost(wf.get("blocks") or [], rows)
+
+
+@mcp.tool()
+def run_workflow(
+    workflow_id: str, input_data: Optional[dict] = None, confirm: bool = False, est_rows: int = 100
+) -> dict:
     """Execute the whole workflow. `input_data` supplies the manual-trigger
     input form values when the workflow has one.
 
     Executions consume tenant credits per node per row — while iterating on a
     build, keep nodes in test mode (edit_workflow set_test_mode all=true) so
     inputs are truncated, and prefer run_node for testing a single step.
+
+    SPEND GATE: if any node is live (not in test mode) this is a real-credit run
+    and is REFUSED unless `confirm=true`. When refused it returns the cost
+    estimate and the list of live nodes instead of running — show the user the
+    estimated credits and get their go-ahead, then call again with confirm=true.
+    A fully test-mode workflow runs without confirmation (inputs are truncated,
+    spend is negligible). `est_rows` feeds the estimate shown on refusal.
+
     Returns the execution_id; follow with get_execution(wait_seconds=...) to
     poll, then get_node_output per node to inspect data.
     """
+    if not confirm:
+        wf = api.get_workflow(workflow_id)
+        live = _live_nodes(wf)
+        if live:
+            return {
+                "status": "blocked",
+                "reason": (
+                    f"{len(live)} node(s) are live (not in test mode) — a full run spends real "
+                    f"credits. Review the estimate, then re-call run_workflow with confirm=true. "
+                    f"To iterate cheaply instead, set_test_mode all=true and use run_node."
+                ),
+                "estimate": projections.estimate_cost(wf.get("blocks") or [], est_rows),
+                "live_nodes": [{"node_id": b.get("id"), "name": projections._pick(b, "variableName", "variable_name")} for b in live],
+            }
     raw = api.execute_workflow(workflow_id, input_data)
     exec_id = projections.extract_execution_id(raw)
     return {"execution_id": exec_id, "raw": raw if exec_id is None else None, "status": "started"}

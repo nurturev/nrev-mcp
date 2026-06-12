@@ -146,6 +146,60 @@ def slim_definition_detail(d: dict) -> dict:
     return {k: v for k, v in out.items() if v is not None}
 
 
+def fields_needing_options(detail: dict) -> list[str]:
+    """Field names in a slim definition whose dropdown values come from an
+    endpoint (flagged `dynamic_options_via` by `_slim_schema_field`). These are
+    the fields `describe_node` should pre-fetch options for in one shot."""
+    return [
+        f["name"]
+        for f in detail.get("settings_fields") or []
+        if f.get("dynamic_options_via") and f.get("name")
+    ]
+
+
+# ── Cost estimation ───────────────────────────────────────────────────────────
+
+
+def estimate_cost(blocks: list[dict], rows: int) -> dict:
+    """Upper-bound credit estimate for a full run, from each block's
+    `creditCostPerItem` × `rows`. This is a CEILING: it assumes all `rows`
+    reach every node — filters, dedup, and qualification splits reduce the real
+    figure. Returns the total, a per-node breakdown, and the top cost drivers."""
+    rows = max(0, int(rows))
+    per_node = []
+    for b in blocks:
+        cost = _pick(b, "creditCostPerItem", "credit_cost_per_item", default=0) or 0
+        try:
+            cost = float(cost)
+        except (TypeError, ValueError):
+            cost = 0.0
+        per_node.append(
+            {
+                "node_id": b.get("id"),
+                "name": _pick(b, "variableName", "variable_name", default=b.get("id")),
+                "credit_cost_per_item": cost,
+                "est_credits": round(cost * rows, 2),
+            }
+        )
+    total = round(sum(n["est_credits"] for n in per_node), 2)
+    drivers = sorted(
+        (n for n in per_node if n["est_credits"] > 0),
+        key=lambda n: n["est_credits"],
+        reverse=True,
+    )[:3]
+    return {
+        "rows_assumed": rows,
+        "estimated_credits_max": total,
+        "per_node": per_node,
+        "cost_drivers": drivers,
+        "note": (
+            "Upper bound: assumes all rows_assumed rows reach every node. "
+            "Filters/dedup/qualification splits reduce actual spend. Per-row "
+            "costs come from the node catalog and can vary at runtime."
+        ),
+    }
+
+
 # ── Executions ───────────────────────────────────────────────────────────────
 
 _RUNNING_STATUSES = {"pending", "running", "queued", "in_progress"}
