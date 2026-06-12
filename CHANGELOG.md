@@ -22,6 +22,12 @@ Claude Code uses for `/plugin update`).
 - **`scripts/bump-version.sh`** — sets the version in lockstep across
   plugin.json, marketplace.json, and pyproject (then re-syncs the bundle).
 
+### Fixed
+- Corrected the marketplace-install command and plugin `homepage` to the real
+  repo owner `nurturev/nrev-mcp` (were pointing at the non-existent
+  `nurturev-dev/nrev-mcp`). The predecessor link stays at
+  `nurturev-dev/nrev-workflow-mcp`, which is where that repo actually lives.
+
 ### Changed
 - **`run_workflow` spend gate (behavior change):** a run with any live
   (non-test-mode) node is now refused unless `confirm=true`, returning the cost

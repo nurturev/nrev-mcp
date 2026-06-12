@@ -38,7 +38,7 @@ nrev-mcp/
 ## Install (Claude Code)
 
 ```
-/plugin marketplace add nurturev-dev/nrev-mcp
+/plugin marketplace add nurturev/nrev-mcp
 /plugin install nrev-workflows@nrev
 ```
 
