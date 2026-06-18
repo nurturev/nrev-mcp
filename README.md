@@ -16,8 +16,11 @@ nrev-mcp/
 │       ├── src/nrev_workflows_mcp/
 │       │   ├── server.py             # entrypoint (stdio)
 │       │   ├── app.py                # FastMCP instance + server instructions
-│       │   ├── auth.py               # in-memory JWT store (never persisted)
-│       │   ├── transport.py          # shared HTTP core
+│       │   ├── auth.py               # persistent auto-refreshing session + manual override
+│       │   ├── config.py             # env (prod/staging) + host + credential-path resolution
+│       │   ├── login.py              # browser sign-in relayed via the web app
+│       │   ├── cli.py                # `nrev-workflows auth login|logout|status`
+│       │   ├── transport.py          # shared HTTP core (refresh + retry on 401)
 │       │   ├── api.py                # workflow platform REST wrappers
 │       │   ├── tables_api.py         # tables service REST wrappers
 │       │   ├── shapes.py             # envelope construction + edit_workflow op engine
@@ -27,6 +30,7 @@ nrev-mcp/
 ├── plugins/
 │   └── nrev-workflows/               # Claude plugin: MCP config + 10 skills
 │       ├── .mcp.json                 # launches bin/run-mcp.sh (stdio via uv)
+│       ├── bin/                      # run-mcp.sh + login.sh (one-time auth login)
 │       └── skills/                   # building-workflows, node-settings,
 │                                     # workflow-examples, troubleshooting,
 │                                     # list-building, qualification…,
@@ -43,12 +47,14 @@ nrev-mcp/
 ```
 
 Prereqs: Python 3.10+ and [uv](https://docs.astral.sh/uv/). Restart Claude
-Code after install; `/mcp` should show `nrev-workflows` with 32 tools.
+Code after install; `/mcp` should show `nrev-workflows` with 33 tools.
 
-First use, once per session: grab a JWT from the platform web app (DevTools →
-Network → `Authorization` header) and tell Claude *"set my nrev JWT to
-eyJ..."* — or export `NREV_JWT` before launching. Tokens last ~12 h and live
-in process memory only.
+First use — sign in once: tell Claude *"log in to nrev workflows"* (the
+`auth_login` tool) or run `plugins/nrev-workflows/bin/login.sh`. A browser opens
+for Google sign-in; the session is saved to `~/.nrev-workflows/credentials`
+(chmod 600) and **refreshed automatically**, so you never paste a JWT.
+Production by default (`NREV_ENV=staging` to switch). For CI, a pre-issued token
+can be supplied via `set_jwt` / `NREV_JWT` — a manual override, not refreshed.
 
 ### Dev install (this repo cloned locally)
 
@@ -87,17 +93,21 @@ entry point.
 
 | Env var | Default | Purpose |
 |---|---|---|
-| `NREV_JWT` | – | Seed the JWT at startup (else use the `set_jwt` tool) |
-| `NREV_WF_HOST` | `https://workflow.public.prod.nurturev.com` | Workflow platform API |
-| `NREV_TABLES_HOST` | `https://nrev-tables-service.public.prod.nurturev.com` | Tables service |
+| `NREV_ENV` | `prod` | Environment (`prod`/`staging`); derives the web-app, UM, workflow & tables hosts. The server otherwise follows the logged-in session's env. |
+| `NREV_JWT` | – | Manual override token at startup (else `auth_login` / `set_jwt`); not refreshed |
+| `NREV_WEBAPP_URL` | per `NREV_ENV` | Web app base — where sign-in is relayed from (overrides `NREV_ENV`) |
+| `NREV_UM_URL` | per `NREV_ENV` | user-management base — session refresh (overrides `NREV_ENV`) |
+| `NREV_WF_HOST` | per `NREV_ENV` | Workflow platform API (overrides `NREV_ENV`) |
+| `NREV_TABLES_HOST` | per `NREV_ENV` | Tables service (overrides `NREV_ENV`) |
+| `NREV_WORKFLOWS_DIR` | `~/.nrev-workflows` | Where the session credentials are stored |
 | `NREV_TIMEOUT` | `60` | HTTP timeout (seconds) |
 | `NREV_DOWNLOAD_DIR` | `~/.nrev-mcp/downloads` | download_node_output target |
 
-## Tool surface (32)
+## Tool surface (33)
 
 | Group | Tools |
 |---|---|
-| Auth | `set_jwt`, `get_auth_status` |
+| Auth | `auth_login` (browser sign-in, auto-refresh), `set_jwt` (manual override), `get_auth_status` |
 | Discovery | `search_nodes`, `find_node` (intent-ranked search), `get_node_type`, `describe_node` (schema + live options in one call), `get_field_options`, `list_connections`, `search_plays` |
 | Workflows | `list_workflows`, `get_workflow`, `create_workflow`, `edit_workflow` (batched graph ops), `update_node_settings`, `manage_variables`, `set_workflow_live`, `get_workflow_live_status` |
 | Execution | `validate_workflow`, `estimate_run_cost`, `run_workflow` (spend-gated), `run_node`, `get_execution` (with wait), `stop_execution`, `get_node_output`, `download_node_output` |
@@ -141,8 +151,9 @@ the platform web app's network tab and fix the wrapper in `api.py`:
 cd servers/workflows && uv run pytest
 ```
 
-24 unit tests cover the mutation engine, projections, and auth — pure
-functions, no network. Live-API smoke testing is manual for now (POC).
+46 unit tests cover the mutation engine, projections, and auth (session
+persistence + refresh, network mocked) — no live calls. Live-API smoke testing
+is manual for now (POC).
 
 ## Roadmap
 
@@ -152,5 +163,6 @@ functions, no network. Live-API smoke testing is manual for now (POC).
 - Second server: full tables/dashboards surface as its own plugin.
 - Eval harness: drive the workflow_studio WBA evaluation datasets through
   Claude Code + this plugin and score with the same judge/rubric.
-- Per-user OAuth replacing JWT-paste; seed-CSV upload once the platform
-  exposes a presigned-URL endpoint.
+- ~~Per-user OAuth replacing JWT-paste~~ — done (v0.3.0): browser sign-in relayed
+  through the platform web app + user-management, with automatic refresh.
+  Seed-CSV upload once the platform exposes a presigned-URL endpoint.

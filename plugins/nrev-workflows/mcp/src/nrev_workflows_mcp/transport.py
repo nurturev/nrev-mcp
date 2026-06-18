@@ -24,6 +24,25 @@ class APIError(RuntimeError):
         self.url = url
 
 
+def _send(
+    host: str,
+    token: str,
+    method: str,
+    path: str,
+    json_body: Optional[dict],
+    params: Optional[dict],
+) -> httpx.Response:
+    with httpx.Client(
+        base_url=host,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+        timeout=httpx.Timeout(TIMEOUT_SECONDS),
+    ) as client:
+        return client.request(method, path, json=json_body, params=params)
+
+
 def request(
     host: str,
     method: str,
@@ -31,20 +50,22 @@ def request(
     json_body: Optional[dict] = None,
     params: Optional[dict] = None,
 ) -> Any:
-    with httpx.Client(
-        base_url=host,
-        headers={
-            "Authorization": f"Bearer {auth.get_jwt()}",
-            "Content-Type": "application/json",
-        },
-        timeout=httpx.Timeout(TIMEOUT_SECONDS),
-    ) as client:
-        r = client.request(method, path, json=json_body, params=params)
-        if r.status_code >= 400:
-            raise APIError(r.status_code, r.text, str(r.request.url))
-        if not r.content:
-            return None
-        try:
-            return r.json()
-        except Exception:
-            return r.text
+    token = auth.get_jwt()
+    r = _send(host, token, method, path, json_body, params)
+
+    # On a 401 the session token may have expired between the expiry check and
+    # the request. Force a refresh and retry once. (A manual override has no
+    # refresh token, so force_refresh returns None and we surface the 401.)
+    if r.status_code == 401:
+        new_token = auth.force_refresh()
+        if new_token and new_token != token:
+            r = _send(host, new_token, method, path, json_body, params)
+
+    if r.status_code >= 400:
+        raise APIError(r.status_code, r.text, str(r.request.url))
+    if not r.content:
+        return None
+    try:
+        return r.json()
+    except Exception:
+        return r.text

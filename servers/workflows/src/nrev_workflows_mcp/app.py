@@ -11,7 +11,10 @@ nRev tables service (lightweight database the workflows read/write).
 
 Protocol for building workflows (the `building-workflows` skill has the full
 version — load it when asked to build or edit a workflow):
-1. Ensure auth (get_auth_status; set_jwt if unset/expired).
+1. Ensure the user is signed in: call get_auth_status; if unset/expired, call
+   auth_login — it opens the user's browser to sign in once (auto-refreshes
+   after). Don't surface environments, shell commands, or file paths to the
+   user; just have them finish the browser sign-in.
 2. Check search_plays for an existing template before building from scratch.
 3. Discover nodes: find_node(intent) to locate the right node by description,
    then describe_node to get its settings schema AND live dropdown options in

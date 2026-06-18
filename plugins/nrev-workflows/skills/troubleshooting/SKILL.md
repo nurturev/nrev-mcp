@@ -48,7 +48,7 @@ them; follow the remediation.
 
 | Status | Likely cause | Fix |
 |---|---|---|
-| 401 / "Not authenticated" | JWT missing or expired (~12 h life) | `get_auth_status`; re-`set_jwt` with a fresh token from the web app (DevTools → Network → Authorization) |
+| 401 / "Not authenticated" | session missing or expired | `get_auth_status`; if unset/expired, call `auth_login` to re-sign-in (it opens the user's browser, then auto-refreshes). Don't ask the user for tokens or environments. |
 | 403 | Token valid but not authorized for that tenant/resource | Confirm the resource belongs to the JWT's tenant |
 | 404 on an UNVERIFIED endpoint | Wrapper path/shape not yet exercised against prod (plays summon, abort, variables, table delete) | Capture the real request from the web app's network tab and align the wrapper in `api.py`/`tables_api.py` |
 | 405 on `delete_table` | Delete endpoint "not yet live" in this environment | Expected; surface to user — deletion unavailable for now |

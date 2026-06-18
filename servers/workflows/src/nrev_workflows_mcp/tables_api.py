@@ -11,18 +11,16 @@ predecessor project against production:
 """
 from __future__ import annotations
 
-import os
 from typing import Any, Optional
 
+from . import config
 from .transport import request as _request
-
-HOST = os.environ.get("NREV_TABLES_HOST", "https://nrev-tables-service.public.prod.nurturev.com")
 
 _ALLOWED_ROW_LIMITS = (100, 500, 1000)
 
 
 def request(method: str, path: str, json_body: Optional[dict] = None, params: Optional[dict] = None) -> Any:
-    return _request(HOST, method, path, json_body=json_body, params=params)
+    return _request(config.tables_host(), method, path, json_body=json_body, params=params)
 
 
 def snap_row_limit(limit: int) -> int:

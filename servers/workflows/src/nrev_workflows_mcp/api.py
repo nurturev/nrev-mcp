@@ -17,16 +17,14 @@ definitions but have not yet been exercised against production by this server.
 """
 from __future__ import annotations
 
-import os
 from typing import Any, Optional
 
+from . import config
 from .transport import request as _request
-
-HOST = os.environ.get("NREV_WF_HOST", "https://workflow.public.prod.nurturev.com")
 
 
 def request(method: str, path: str, json_body: Optional[dict] = None, params: Optional[dict] = None) -> Any:
-    return _request(HOST, method, path, json_body=json_body, params=params)
+    return _request(config.workflow_host(), method, path, json_body=json_body, params=params)
 
 
 # ── Workflows ────────────────────────────────────────────────────────────────
