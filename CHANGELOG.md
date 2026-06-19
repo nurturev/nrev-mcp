@@ -5,6 +5,31 @@ All notable changes to the `nrev-workflows` plugin. Format loosely follows
 the `version` in `plugins/nrev-workflows/.claude-plugin/plugin.json` (the field
 Claude Code uses for `/plugin update`).
 
+## [0.5.0]
+
+### Added
+- **Tenant awareness + mid-session drift protection.** A user can belong to
+  several tenants; the active one is server-side state (resolved per request from
+  the session, not encoded in the token), so switching it in the web app makes
+  the same session silently start resolving to a different tenant mid-task.
+  - **`get_active_tenant`** — reports the tenant work is anchored to plus all the
+    tenants the user can switch among; the first call *pins* the active tenant,
+    later calls flag `changed_since_pin`. Read-only: this MCP never switches the
+    tenant (that stays a web-app action).
+  - **`tenant.py`** — in-process pin + TTL-cached active-tenant read + drift check
+    over UM's `GET /user/tenants`.
+  - **Drift is caught without gating every call.** Mutations on an existing
+    resource already fail server-side after a switch (the new tenant can't see
+    it), so a 403/404 from the workflow/tables host is diagnosed: if the active
+    tenant drifted, the tool raises `TenantChangedError` (stop + inform) instead
+    of a confusing access error. Creation tools (`create_workflow`,
+    `create_table`) — which spawn a resource with no id for the backend to gate —
+    re-verify the tenant *before* creating.
+
+### Changed
+- Tool count 37 → 38. Server instructions add a "confirm the tenant" step before
+  building, with explicit "halt on tenant change" guidance.
+
 ## [0.4.0]
 
 ### Added

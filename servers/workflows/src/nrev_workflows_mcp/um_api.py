@@ -32,6 +32,20 @@ def request(method: str, path: str, json_body: Optional[dict] = None, params: Op
     return _request(config.um_url(), method, path, json_body=json_body, params=params)
 
 
+# ── tenancy ────────────────────────────────────────────────────────────────
+# A user may belong to several tenants; exactly one is active server-side (the
+# token alone doesn't pin it — UM resolves the active mapping per request). This
+# lists all of them so the active one (is_enabled) can be identified.
+
+
+def get_user_tenants() -> dict:
+    """GET /user/tenants -> {"tenants": [{tenant_id, tenant_name, tenant_domain, is_enabled}]}."""
+    return request("GET", "/user/tenants")
+
+
+# ── knowledge base ───────────────────────────────────────────────────────────
+
+
 def get_knowledge_base() -> dict:
     return request("GET", _BASE)
 

@@ -15,16 +15,26 @@ version — load it when asked to build or edit a workflow):
    auth_login — it opens the user's browser to sign in once (auto-refreshes
    after). Don't surface environments, shell commands, or file paths to the
    user; just have them finish the browser sign-in.
-2. Check search_plays for an existing template before building from scratch.
-3. Discover nodes: find_node(intent) to locate the right node by description,
+2. Confirm the tenant: call get_active_tenant and tell the user which tenant the
+   work will happen in (by name). A user may belong to several tenants and can
+   switch the active one in the web app at any time — the active tenant is
+   server-side state, NOT in the token, so the same session can start resolving
+   to a different tenant mid-task. The first call anchors work to that tenant.
+   This MCP never switches tenants itself; if the user wants a different one,
+   ask them to switch in the web app, then call get_active_tenant again. If a
+   later call reports changed_since_pin, or a tool stops with a "tenant changed"
+   error, HALT — tell the user the tenant changed (from → to) and confirm how to
+   proceed before doing anything else.
+4. Check search_plays for an existing template before building from scratch.
+5. Discover nodes: find_node(intent) to locate the right node by description,
    then describe_node to get its settings schema AND live dropdown options in
    one call. NEVER guess node settings field names or values — your training
    data does not contain this platform's field names, and wrong shapes fail
    silently. (See the workflow-examples skill for complete, correctly-shaped
    builds.)
-4. Build with edit_workflow (batched operations) and update_node_settings.
-5. validate_workflow after every batch of changes.
-6. Test-run with run_workflow / run_node, then inspect get_execution and
+6. Build with edit_workflow (batched operations) and update_node_settings.
+7. validate_workflow after every batch of changes.
+8. Test-run with run_workflow / run_node, then inspect get_execution and
    get_node_output — including row-level errors, which do NOT surface in the
    node-level status. (When a run fails, the troubleshooting skill maps
    symptoms to fixes.)

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from . import api, projections, shapes
+from . import api, projections, shapes, tenant
 from .app import mcp
 
 _def_cache: dict[str, dict] = {}
@@ -80,6 +80,9 @@ def create_workflow(
     then rename it and adapt nodes. Returns the slim view including the new
     workflow_id.
     """
+    # New resource — no existing id for the backend to access-gate, so a
+    # mid-flight tenant switch would silently create this in the wrong tenant.
+    tenant.assert_pinned_active("creating a workflow")
     if from_play_id:
         wf = api.summon_play(from_play_id)
         wf_id = wf.get("id") or wf.get("workflow_id")

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from . import projections, tables_api
+from . import projections, tables_api, tenant
 from .app import mcp
 
 
@@ -43,6 +43,9 @@ def create_table(table_name: str, columns: list[dict]) -> dict:
     (they become {{template}} identifiers in node settings — spaces break
     template resolution).
     """
+    # New resource — no existing id for the backend to access-gate, so a
+    # mid-flight tenant switch would silently create this in the wrong tenant.
+    tenant.assert_pinned_active("creating a table")
     return projections.slim_table(tables_api.create_table(table_name, columns))
 
 

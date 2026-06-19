@@ -25,8 +25,9 @@ nrev-mcp/
 │       │   ├── tables_api.py         # tables service REST wrappers
 │       │   ├── shapes.py             # envelope construction + edit_workflow op engine
 │       │   ├── projections.py        # compact views of large API payloads
-│       │   ├── um_api.py             # user-management REST wrappers (knowledge base)
-│       │   └── tools_*.py            # 37 MCP tools in 6 modules
+│       │   ├── um_api.py             # user-management REST wrappers (tenancy + knowledge base)
+│       │   ├── tenant.py             # active-tenant pin + mid-session drift detection
+│       │   └── tools_*.py            # 38 MCP tools in 7 modules
 │       └── tests/                    # pure-logic unit tests (no network)
 ├── plugins/
 │   └── nrev-workflows/               # Claude plugin: MCP config + 10 skills
@@ -48,7 +49,7 @@ nrev-mcp/
 ```
 
 Prereqs: Python 3.10+ and [uv](https://docs.astral.sh/uv/). Restart Claude
-Code after install; `/mcp` should show `nrev-workflows` with 37 tools.
+Code after install; `/mcp` should show `nrev-workflows` with 38 tools.
 
 First use — sign in once: tell Claude *"log in to nrev workflows"* (the
 `auth_login` tool) or run `plugins/nrev-workflows/bin/login.sh`. A browser opens
@@ -104,11 +105,12 @@ entry point.
 | `NREV_TIMEOUT` | `60` | HTTP timeout (seconds) |
 | `NREV_DOWNLOAD_DIR` | `~/.nrev-mcp/downloads` | download_node_output target |
 
-## Tool surface (37)
+## Tool surface (38)
 
 | Group | Tools |
 |---|---|
 | Auth | `auth_login` (browser sign-in, auto-refresh), `set_jwt` (manual override), `get_auth_status` |
+| Tenant | `get_active_tenant` (which tenant work is anchored to + the ones the user can switch among; read-only — never switches) |
 | Discovery | `search_nodes`, `find_node` (intent-ranked search), `get_node_type`, `describe_node` (schema + live options in one call), `get_field_options`, `list_connections`, `search_plays` |
 | Workflows | `list_workflows`, `get_workflow`, `create_workflow`, `edit_workflow` (batched graph ops), `update_node_settings`, `manage_variables`, `set_workflow_live`, `get_workflow_live_status` |
 | Execution | `validate_workflow`, `estimate_run_cost`, `run_workflow` (spend-gated), `run_node`, `get_execution` (with wait), `stop_execution`, `get_node_output`, `download_node_output` |
@@ -123,6 +125,15 @@ Design notes:
 - `run_workflow` refuses a real-credit run (any node not in test mode) without
   `confirm=true`, returning an `estimate_run_cost` breakdown so spend is
   surfaced before it happens.
+- **Tenant safety.** A user can belong to several tenants; the active one is
+  server-side state (not in the token), so switching it in the web app makes the
+  same session resolve to a different tenant mid-task. `get_active_tenant` pins
+  the tenant work is anchored to; the MCP never switches it. Drift is then caught
+  two ways without gating every call: creation tools (`create_workflow`,
+  `create_table`) re-verify before spawning a resource the backend can't yet
+  access-gate, and a 403/404 from the workflow/tables host is diagnosed — if the
+  active tenant has drifted, the tool raises a clear `TenantChangedError` (stop
+  and inform the user) instead of a confusing access error.
 - `edit_workflow` replaces the predecessor's 8 mutation micro-tools with one
   batched operation engine (`servers/workflows/src/nrev_workflows_mcp/shapes.py`)
   that enforces the platform invariants: single-input rule, Magic Node df1–df5

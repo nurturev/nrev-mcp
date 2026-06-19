@@ -6,6 +6,7 @@ from .app import mcp
 
 # Tool modules register themselves against `mcp` on import.
 from . import tools_auth  # noqa: F401,E402
+from . import tools_tenant  # noqa: F401,E402
 from . import tools_discovery  # noqa: F401,E402
 from . import tools_workflows  # noqa: F401,E402
 from . import tools_execution  # noqa: F401,E402
