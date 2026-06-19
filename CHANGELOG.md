@@ -5,6 +5,31 @@ All notable changes to the `nrev-workflows` plugin. Format loosely follows
 the `version` in `plugins/nrev-workflows/.claude-plugin/plugin.json` (the field
 Claude Code uses for `/plugin update`).
 
+## [0.4.0]
+
+### Added
+- **Tenant knowledge base tools.** Read and maintain the company context the
+  platform's AI nodes draw on — official website plus ICPs, ideal personas,
+  identified competitors, and product offering. Four task-oriented tools (not a
+  1:1 mirror of the CRUD routes):
+  - **`search_knowledge`** — ranked retrieval (reuses the `find_node` lexical
+    ranker) scoped by collection, so you ground a task on only the relevant
+    entries instead of dumping the whole KB; empty query lists a collection.
+  - **`get_knowledge_base`** — full read annotated with `gaps` (empty slots) and
+    `is_usable` (mirrors UM's ≥3/5 filledness rule).
+  - **`save_knowledge`** — reconciling merge upsert: matches by id then
+    case-insensitive name → update (omitted fields preserved), else add
+    (cap-aware; over-cap adds reported, not fatal). Never deletes, so it can't
+    silently break a live workflow.
+  - **`forget_knowledge`** — guarded delete that surfaces the live-workflow block
+    (returns the blocking workflow ids) instead of erroring.
+- **`um_api.py`** — first user-management *data* integration beyond auth refresh;
+  the tenant is resolved server-side from the session token.
+
+### Changed
+- Tool count 33 → 37. Server instructions now point at the knowledge base for
+  grounding generated/personalised content.
+
 ## [0.3.0]
 
 ### Added
