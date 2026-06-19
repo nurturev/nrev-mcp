@@ -25,7 +25,8 @@ nrev-mcp/
 │       │   ├── tables_api.py         # tables service REST wrappers
 │       │   ├── shapes.py             # envelope construction + edit_workflow op engine
 │       │   ├── projections.py        # compact views of large API payloads
-│       │   └── tools_*.py            # 32 MCP tools in 5 modules
+│       │   ├── um_api.py             # user-management REST wrappers (knowledge base)
+│       │   └── tools_*.py            # 37 MCP tools in 6 modules
 │       └── tests/                    # pure-logic unit tests (no network)
 ├── plugins/
 │   └── nrev-workflows/               # Claude plugin: MCP config + 10 skills
@@ -47,7 +48,7 @@ nrev-mcp/
 ```
 
 Prereqs: Python 3.10+ and [uv](https://docs.astral.sh/uv/). Restart Claude
-Code after install; `/mcp` should show `nrev-workflows` with 33 tools.
+Code after install; `/mcp` should show `nrev-workflows` with 37 tools.
 
 First use — sign in once: tell Claude *"log in to nrev workflows"* (the
 `auth_login` tool) or run `plugins/nrev-workflows/bin/login.sh`. A browser opens
@@ -103,7 +104,7 @@ entry point.
 | `NREV_TIMEOUT` | `60` | HTTP timeout (seconds) |
 | `NREV_DOWNLOAD_DIR` | `~/.nrev-mcp/downloads` | download_node_output target |
 
-## Tool surface (33)
+## Tool surface (37)
 
 | Group | Tools |
 |---|---|
@@ -112,6 +113,7 @@ entry point.
 | Workflows | `list_workflows`, `get_workflow`, `create_workflow`, `edit_workflow` (batched graph ops), `update_node_settings`, `manage_variables`, `set_workflow_live`, `get_workflow_live_status` |
 | Execution | `validate_workflow`, `estimate_run_cost`, `run_workflow` (spend-gated), `run_node`, `get_execution` (with wait), `stop_execution`, `get_node_output`, `download_node_output` |
 | Tables | `list_tables`, `get_table`, `create_table`, `update_table`, `delete_table`, `get_table_rows`, `add_table_rows` |
+| Knowledge base | `search_knowledge` (ranked retrieval), `get_knowledge_base` (full read + gaps), `save_knowledge` (reconciling merge upsert), `forget_knowledge` (guarded delete) |
 
 Design notes:
 - `find_node` ranks the whole catalog against a natural-language intent

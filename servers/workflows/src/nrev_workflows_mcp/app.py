@@ -31,6 +31,13 @@ version — load it when asked to build or edit a workflow):
 Executions consume tenant credits: keep nodes in test mode while iterating.
 A full run_workflow with live nodes is refused without confirm=true — use
 estimate_run_cost and get the user's go-ahead before spending real credits.
+
+The tenant knowledge base holds the company's website, ICPs, personas,
+competitors, and product offering — the context AI nodes draw on. Before
+generating or personalising content, ground it: search_knowledge(query) for the
+entries relevant to the task, or get_knowledge_base for the full picture plus
+gaps. save_knowledge persists learnings back (reconciling add/update in one
+call); forget_knowledge removes an entry.
 """
 
 mcp = FastMCP("nrev-workflows", instructions=INSTRUCTIONS)
