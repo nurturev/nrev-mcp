@@ -92,3 +92,43 @@ def test_slim_execution_running_detection():
     done = projections.slim_execution({"id": "e1", "status": "completed"})
     assert running["is_running"] is True
     assert done["is_running"] is False
+
+
+def test_slim_execution_reads_block_runs():
+    # The platform returns the per-node-RUN list under `blockRuns` (camelCase
+    # aliases). Each run keeps its own node_execution_id; a node that ran twice
+    # appears twice. row_count comes from output[].file_info.rows_count.
+    raw = {
+        "id": "exec-1",
+        "status": "completed",
+        "creditsUsed": 9440,
+        "nodeExecutionCount": 131,
+        "blockRuns": [
+            {
+                "id": "ne-1",
+                "workflowBlockId": "node-A",
+                "workflowBlockName": "Find Competitor Sales Reps",
+                "status": "completed",
+                "creditsUsed": 3,
+                "output": [{"file_info": {"rows_count": 58}, "handle_condition": "_default"}],
+            },
+            {
+                "id": "ne-2",
+                "workflowBlockId": "node-A",
+                "workflowBlockName": "Find Competitor Sales Reps",
+                "status": "completed",
+                "creditsUsed": 0,
+                "output": [{"file_info": {"rows_count": 25}}, {"file_info": {"rows_count": 5}}],
+            },
+        ],
+    }
+    slim = projections.slim_execution(raw)
+    assert slim["node_execution_count"] == 131
+    assert slim["credits_used"] == 9440
+    runs = slim["node_runs"]
+    assert [r["node_execution_id"] for r in runs] == ["ne-1", "ne-2"]
+    # Same node_id appears once per run (loop/fan-out), distinct run ids.
+    assert {r["node_id"] for r in runs} == {"node-A"}
+    assert runs[0]["row_count"] == 58
+    assert runs[1]["row_count"] == 30  # summed across output handles
+    assert runs[0]["node_name"] == "Find Competitor Sales Reps"

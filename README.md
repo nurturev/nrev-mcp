@@ -27,7 +27,7 @@ nrev-mcp/
 │       │   ├── projections.py        # compact views of large API payloads
 │       │   ├── um_api.py             # user-management REST wrappers (tenancy + knowledge base)
 │       │   ├── tenant.py             # active-tenant pin + mid-session drift detection
-│       │   └── tools_*.py            # 38 MCP tools in 7 modules
+│       │   └── tools_*.py            # 44 MCP tools in 7 modules
 │       └── tests/                    # pure-logic unit tests (no network)
 ├── plugins/
 │   └── nrev-workflows/               # Claude plugin: MCP config + 10 skills
@@ -49,7 +49,7 @@ nrev-mcp/
 ```
 
 Prereqs: Python 3.10+ and [uv](https://docs.astral.sh/uv/). Restart Claude
-Code after install; `/mcp` should show `nrev-workflows` with 38 tools.
+Code after install; `/mcp` should show `nrev-workflows` with 44 tools.
 
 First use — sign in once: tell Claude *"log in to nrev workflows"* (the
 `auth_login` tool) or run `plugins/nrev-workflows/bin/login.sh`. A browser opens

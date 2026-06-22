@@ -205,6 +205,23 @@ def estimate_cost(blocks: list[dict], rows: int) -> dict:
 _RUNNING_STATUSES = {"pending", "running", "queued", "in_progress"}
 
 
+def _node_run_row_count(output: Any) -> Optional[int]:
+    """Total rows a node run emitted — summed over its output items (one per
+    output handle). The platform reports it at output[].file_info.rows_count."""
+    if not isinstance(output, list):
+        return None
+    total, seen = 0, False
+    for item in output:
+        if not isinstance(item, dict):
+            continue
+        fi = _pick(item, "file_info", "fileInfo", default={}) or {}
+        rc = _pick(fi, "rows_count", "rowsCount") if isinstance(fi, dict) else None
+        if isinstance(rc, int):
+            total += rc
+            seen = True
+    return total if seen else None
+
+
 def slim_execution(raw: Any) -> dict:
     if not isinstance(raw, dict):
         return {"raw": raw}
@@ -214,19 +231,38 @@ def slim_execution(raw: Any) -> dict:
         "status": data.get("status"),
         "started_at": _pick(data, "started_at", "startedAt"),
         "ended_at": _pick(data, "ended_at", "endedAt"),
+        "duration": data.get("duration"),
         "credits_used": _pick(data, "credits_used", "creditsUsed"),
+        "node_execution_count": _pick(data, "node_execution_count", "nodeExecutionCount"),
+        "triggered_by": _pick(data, "execution_triggered_by", "executionTriggeredBy"),
         "error": _pick(data, "error_data", "errorData", "error_message", "error"),
     }
-    nodes = _pick(data, "node_executions", "nodeExecutions", default=None)
-    if isinstance(nodes, list):
-        out["nodes"] = [
+    # Per-node-RUN breakdown. The platform returns this under `blockRuns`
+    # (Pydantic field node_execution_logs, serialized by alias). One entry PER
+    # RUN — a node that runs many times (loops/fan-out) appears once per run,
+    # each with its own node_execution_id. Pass that id to get_node_output to
+    # read that specific run's rows.
+    runs = _pick(data, "blockRuns", "node_execution_logs", "node_executions", "nodeExecutions", default=None)
+    if isinstance(runs, list):
+        out["node_runs"] = [
             {
-                "node_id": _pick(n, "node_id", "nodeId"),
-                "node_execution_id": _pick(n, "node_execution_id", "nodeExecutionId", "id"),
-                "status": n.get("status"),
-                "error": _pick(n, "error_message", "errorMessage", "error"),
+                k: v
+                for k, v in {
+                    "node_execution_id": _pick(n, "node_execution_id", "nodeExecutionId", "id"),
+                    "node_id": _pick(n, "node_id", "nodeId", "workflowBlockId"),
+                    "node_name": _pick(n, "node_name", "workflowBlockName", "variableName", "variable_name"),
+                    "status": n.get("status"),
+                    "duration": n.get("duration"),
+                    "credits_used": _pick(n, "credits_used", "creditsUsed"),
+                    "row_count": _node_run_row_count(_pick(n, "output", "output_data", "outputData")),
+                    "is_test_mode": _pick(n, "is_test_mode", "isTestMode"),
+                    "started_at": _pick(n, "started_at", "startedAt"),
+                    "ended_at": _pick(n, "ended_at", "endedAt"),
+                    "error": _pick(n, "error", "error_message", "errorMessage"),
+                }.items()
+                if v is not None
             }
-            for n in nodes
+            for n in runs
             if isinstance(n, dict)
         ]
     out["is_running"] = str(out.get("status") or "").lower() in _RUNNING_STATUSES

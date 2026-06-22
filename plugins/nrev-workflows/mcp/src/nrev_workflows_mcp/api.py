@@ -231,8 +231,16 @@ def list_executions(wf_id: str, limit: int = 10) -> dict:
     return request("GET", f"/execution-logs/workflow/{wf_id}", params={"limit": limit})
 
 
-def get_execution_detail(wf_id: str, exec_id: str) -> dict:
-    return request("GET", f"/execution-logs/workflow/{wf_id}/workflow-execution/{exec_id}")
+def get_execution_detail(wf_id: str, exec_id: str, only_latest: bool = True) -> dict:
+    """GET the run log for one execution. The response carries the per-node-RUN
+    list under `blockRuns` (one entry per block execution). `only_latest=false`
+    returns ALL runs (a node in a loop/fan-out appears once per run);
+    `only_latest=true` collapses to the latest run per node."""
+    return request(
+        "GET",
+        f"/execution-logs/workflow/{wf_id}/workflow-execution/{exec_id}",
+        params={"only_latest": "true" if only_latest else "false"},
+    )
 
 
 def abort_execution(wf_id: str, exec_id: str) -> Any:
@@ -257,6 +265,30 @@ def get_node_preview(
     return request(
         "GET",
         f"/executions/workflow/{wf_id}/workflow-execution/{exec_id}/node/{node_id}/preview",
+        params=params,
+    )
+
+
+def get_node_execution_preview(
+    wf_id: str,
+    exec_id: str,
+    node_execution_id: str,
+    handle_condition: str = "_default",
+    skip: int = 0,
+    limit: int = 50,
+    search_string: Optional[str] = None,
+) -> dict:
+    """Preview the output of ONE specific node run, addressed by its
+    node_execution_id (from the execution's `blockRuns`). The by-node preview
+    above only returns a node's LATEST run; this targets any run — needed when
+    a node executed many times (loops/fan-out). Same Pagination shape."""
+    limit = max(1, min(int(limit), 100))  # >100 silently returns 0 rows
+    params: dict = {"handle_condition": handle_condition, "skip": max(0, int(skip)), "limit": limit}
+    if search_string:
+        params["search_string"] = search_string
+    return request(
+        "GET",
+        f"/executions/workflow/{wf_id}/workflow-execution/{exec_id}/node-execution/{node_execution_id}/preview",
         params=params,
     )
 

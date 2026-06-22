@@ -5,6 +5,54 @@ All notable changes to the `nrev-workflows` plugin. Format loosely follows
 the `version` in `plugins/nrev-workflows/.claude-plugin/plugin.json` (the field
 Claude Code uses for `/plugin update`).
 
+## [0.6.0]
+
+### Added
+- **Per-node-run execution observability.** `get_execution` now returns the full
+  per-block breakdown in `node_runs` (one entry per block execution — a node in
+  a loop/fan-out appears once per run, each with its own `node_execution_id`,
+  status, duration, `credits_used`, `row_count`, and `error`) plus
+  `node_execution_count` (the total blocks executed). It defaults to all runs;
+  `only_latest=true` collapses to the latest run per node.
+  - **`get_node_output` / `download_node_output` gained `node_execution_id`** — a
+    run selector. Pass an id from `node_runs` to read THAT run's rows; `node_id`
+    alone still returns the node's latest run. Reaching a non-latest run was
+    previously impossible (the by-node endpoint only serves the latest), and
+    substituting a foreign execution id 403s — the tool docs now steer to the
+    correct flow.
+- **`check_node_errors`** — scans a node's output rows for row-level
+  `error` / `error_N` values that a node-level `completed` status hides
+  (Pipedream-wrapped actions and nrev_tables Add/Update Row nodes report success
+  while individual rows failed). Run after writes to catch silent failures.
+- **`update_table_rows`** — cell-level PATCH of existing rows by `row_id`
+  (`[{row_id, values}]`): only the listed cells change, `null` clears a cell.
+  This closes the long-standing gap where the plugin could add rows but not edit
+  one (e.g. flip an `is_archived` / "Connection Removed" flag).
+- **`delete_table_rows`** — hard-delete up to 1000 rows by `row_id`
+  (`confirm=true` gate).
+- **Server-side table analytics** — compute over a whole table without pulling
+  rows into context:
+  - **`aggregate_table`** — count / count_distinct / sum / avg / min / max with
+    optional group_by; rewrites response group keys from ids to names.
+  - **`get_distinct_values`** — unique values of one column (accepts name or id).
+  - **`join_tables`** — inner/left join across tables; rewrites the prefix-keyed
+    response (`base.<id>` / `j0.<id>`) to column names, table-prefixed only on
+    collision.
+
+### Fixed
+- **`get_execution` returned summary-only.** `slim_execution` read the per-node
+  list from `node_executions`/`nodeExecutions`, but the platform sends it under
+  `blockRuns` — so the entire breakdown was silently dropped and only status /
+  credits / timestamps surfaced. Now reads `blockRuns` (with fallbacks).
+- **`add_table_rows` keyed values by column NAME**, but the tables service keys
+  rows by `column_id` and 400s ("Unknown column") on a name — so name-keyed
+  inserts silently failed. Add (and the new update) now resolve names → ids
+  against the table schema (id first, then case-insensitive name), matching the
+  platform's own Add Row / Update Row nodes.
+
+### Changed
+- Tool count 38 → 44.
+
 ## [0.5.0]
 
 ### Added

@@ -10,7 +10,7 @@
       "source": "./plugins/nrev-workflows",
       "category": "productivity",
       "keywords": ["nrev", "workflow", "gtm", "mcp"],
-      "version": "0.5.0"
+      "version": "0.6.0"
     }
   ]
 }
