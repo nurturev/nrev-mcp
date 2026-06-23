@@ -160,13 +160,61 @@ def test_multi_parent_refused_for_plain_node_allowed_for_magic():
     assert all(r in shapes.all_edge_ids(wf) for r in refs)
 
 
-def test_magic_references_json_string_roundtrip():
+def test_magic_references_written_nested_not_top_level():
+    # Canonical location is nested inside the instructions_and_ref group; a
+    # top-level references entry is the broken shape (6/3136 in prod).
+    block = shapes.new_block(shapes.MAGIC_NODE, "M")
+    shapes.write_magic_references(block, ["e1", "e2"], False)
+    assert shapes.get_setting(block, shapes.MAGIC_REFS_FIELD) is None  # no top-level entry
+    group = shapes.get_setting(block, shapes.MAGIC_INSTRUCTIONS_GROUP)
+    assert group is not None
+    refs, as_str = shapes.read_magic_references(block)
+    assert refs == ["e1", "e2"] and as_str is False
+
+
+def test_magic_references_legacy_top_level_read_and_migrated():
+    # Old nodes stored references (JSON-string-encoded) at the top level; reads
+    # still work, and the next write migrates them into the group.
     block = shapes.new_block(shapes.MAGIC_NODE, "M", settings={shapes.MAGIC_REFS_FIELD: json.dumps(["e1"])})
     refs, as_str = shapes.read_magic_references(block)
     assert refs == ["e1"] and as_str
     shapes.write_magic_references(block, ["e1", "e2"], as_str)
-    entry = shapes.get_setting(block, shapes.MAGIC_REFS_FIELD)
-    assert json.loads(entry["field_value"]) == ["e1", "e2"]
+    assert shapes.get_setting(block, shapes.MAGIC_REFS_FIELD) is None  # legacy entry removed
+    refs2, _ = shapes.read_magic_references(block)
+    assert refs2 == ["e1", "e2"]
+
+
+def test_set_magic_code_builds_codesection_envelope_and_preserves_refs():
+    block = shapes.new_block(shapes.MAGIC_NODE, "M")
+    shapes.write_magic_references(block, ["edge-1"], False)
+    shapes.set_magic_code(block, code="result = df1", instructions="merge them")
+
+    code_entry = shapes.get_setting(block, shapes.MAGIC_CODE_SECTION)
+    # code_section.field_value must be a non-empty list carrying the -code child
+    assert isinstance(code_entry["field_value"], list)
+    code_child = code_entry["field_value"][0]
+    assert code_child["field_name"] == shapes.MAGIC_CODE_FIELD
+    assert code_child["field_value"] == "result = df1"
+
+    group = shapes.get_setting(block, shapes.MAGIC_INSTRUCTIONS_GROUP)["field_value"]
+    names = {c["field_name"] for c in group}
+    assert shapes.MAGIC_REFS_FIELD in names and shapes.MAGIC_INSTRUCTIONS_FIELD in names
+    refs, _ = shapes.read_magic_references(block)
+    assert refs == ["edge-1"]  # references preserved through a code write
+
+
+def test_coerce_magic_settings_translates_code_key():
+    block = shapes.new_block(shapes.MAGIC_NODE, "M")
+    remaining = shapes.coerce_magic_settings(block, {"code": "result = df1", "labels_only": "x"})
+    assert remaining == {"labels_only": "x"}  # non-magic keys pass through
+    code_entry = shapes.get_setting(block, shapes.MAGIC_CODE_SECTION)
+    assert code_entry["field_value"][0]["field_value"] == "result = df1"
+
+
+def test_coerce_magic_settings_noop_for_non_magic_node():
+    block = shapes.new_block(ACTION_TYPE, "A")
+    settings = {"code": "x", "foo": "bar"}
+    assert shapes.coerce_magic_settings(block, settings) is settings  # unchanged, passed through
 
 
 def test_wiring_into_start_node_flips_trigger_with_warning():

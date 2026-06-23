@@ -5,6 +5,43 @@ All notable changes to the `nrev-workflows` plugin. Format loosely follows
 the `version` in `plugins/nrev-workflows/.claude-plugin/plugin.json` (the field
 Claude Code uses for `/plugin update`).
 
+## [0.7.0]
+
+### Fixed
+- **Magic Node could not be configured through the MCP (blocker).** Setting the
+  Magic Node's code rejected every payload with "Whoops! Missing a field -
+  instructions_and_ref / code_section". Two production-verified shape bugs, both
+  now handled for the caller:
+  - `code_section` deserializes to a pydantic `CodeSection` model — a bare
+    string or empty list is rejected ("Input should be a valid dictionary or
+    instance of CodeSection"). It requires the nested
+    `[{field_name: …-code, field_value: "<python>"}]` envelope.
+  - The Magic Node's input **references must be nested inside the
+    `instructions_and_ref` group**, not stored as a top-level setting (3,134 of
+    3,136 live Magic Nodes use the nested shape; the top-level form leaves the
+    group's required `references` child empty). `edit_workflow` edge-wiring and
+    `update_node_settings` now read/write/migrate references in the nested
+    location, and `update_node_settings` accepts a `code` (and optional
+    `instructions`) shortcut that builds the correct envelopes.
+- **`get_field_options` 400 "No valid connection found in settings".** When a
+  Pipedream connection was supplied under a mismatched field name (e.g.
+  `…-send_message-connection` vs the node's real
+  `…-slack_v2_send_message-slack_connection_id`), the dropdown fetch failed.
+  `get_field_options` now repairs the connection field name from the node's
+  schema (the `app_connection` field) and retries once.
+
+### Added
+- **Silent-failure nudges for misconfigured workflows.** A node that runs but
+  produces nothing no longer looks "successful":
+  - `get_execution` flags `zero_row_nodes` (with a `warnings` note) for nodes
+    that completed but emitted 0 rows, starving downstream Slack/Sheets/CRM
+    nodes. `run_workflow` guidance now says not to green-light a live run until a
+    test run produces rows end to end.
+  - `validate_workflow` adds advisory `unconfigured_warnings` for a downstream
+    node left with no settings at all (e.g. a Filter with no condition) — the
+    platform raises no config error for it, yet it silently drops every row.
+    Advisory only: it does not flip `valid`.
+
 ## [0.6.0]
 
 ### Added

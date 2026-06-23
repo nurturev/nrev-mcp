@@ -184,9 +184,27 @@ Claude values are the full URN, not a slug. **`web_search_enabled` (and `prompt_
 - Action-only nodes (Magic Node, Custom Code, and every node marked NO in the root-capable column above) cannot be workflow roots.
 - Validation checklist before running: no orphan non-trigger nodes, no handle mismatches on edges, exactly one listener, all required settings present (`get_workflow` shows current state).
 
+## Magic Node (code / merge / transform)
+
+The Magic Node stores its config in two `group` settings with a fiddly nested shape — **let `update_node_settings` build it for you**: pass `code` (the Python source) and optionally `instructions` (a natural-language prompt), and the tool emits the correct envelopes.
+
+```python
+# 1. Wire inputs FIRST (edit_workflow add_edge into df1..df5) — this auto-fills
+#    the required references. THEN set the code:
+update_node_settings(workflow_id, magic_node_id, settings={
+    "code": "result = df1.merge(df2, on='email', how='outer').drop_duplicates('email')",
+})
+```
+
+Rules the wrapper handles so you don't hit the backend's traps:
+- The code lives in `data_manipulation-magic_node-code_section`, which the backend deserializes to a `CodeSection` model. A bare string or empty list is rejected with **"Input should be a valid dictionary or instance of CodeSection"** — it must be the nested `[{field_name: …-code, field_value: "<python>"}]` envelope. The `code` shortcut produces this.
+- References (the `df1..dfN` input edge ids) must be **nested inside** the `instructions_and_ref` group, not a top-level setting — a top-level entry leaves the group's required `references` child empty and the backend rejects with **"Missing a field - instructions_and_ref"**. `edit_workflow` and `update_node_settings` now write/preserve them in the nested location automatically.
+- Your code MUST assign a pandas DataFrame to `result`. Allowed imports: pandas, numpy, datetime, json, re, math. Read workflow variables via `workflow_variables.get("name")`. Reference each input by its df name (`df1`, `df2`, …).
+- After setting code, `validate_workflow` should report the node clean (no `node_config_error`). If you wired no inputs yet, references is empty and the backend will (correctly) ask for one — add an input edge.
+
 ## Pipedream nodes
 
-**Connection-field naming is inconsistent and NOT inferable** — never guess from a formula. Examples:
+**Connection-field naming is inconsistent and NOT inferable** — never guess from a formula. Source it from `get_field_options`/`describe_node` (the field of type `app_connection`). If a wrong connection field name slips through, `get_field_options` now repairs it from the schema and retries, but don't rely on that — pass the real name. Examples:
 - Gmail Send Email → `pipedream-gmail-gmail_send_email-gmail`
 - Slack V2 Send Message → `pipedream-slack_v2-slack_v2_send_message-slack_v2`
 - Slack New Message channel → `pipedream-slack_v2-slack_v2_new_message_in_channels-conversations` (NOT `channel`/`channelId`)

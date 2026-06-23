@@ -25,9 +25,20 @@ MAGIC_NODE = "69f5628d-2c3b-4816-ac80-6825a1058ed5"
 CUSTOM_CODE = "ae54c44f-60ee-47c4-91d7-eae7fa849133"
 SCHEDULER = "68da2fb4-8295-4568-9415-c47de58e6224"
 
+# Magic Node group/code fields (names verified against the production
+# node_definitions.settings_schema for 69f5628d…). The two `group` settings each
+# hold a list of sub-field envelopes; references live NESTED inside the
+# instructions_and_ref group (see read/write_magic_references below).
 MAGIC_REFS_FIELD = "data_manipulation-magic_node-references"
+MAGIC_INSTRUCTIONS_GROUP = "data_manipulation-magic_node-instructions_and_ref"
+MAGIC_INSTRUCTIONS_FIELD = "data_manipulation-magic_node-instructions"
+MAGIC_INSTRUCTIONS_TEXT_FIELD = "data_manipulation-magic_node-instructions_text"
+MAGIC_CODE_SECTION = "data_manipulation-magic_node-code_section"
+MAGIC_CODE_FIELD = "data_manipulation-magic_node-code"
 MAGIC_FAN_IN_HANDLES = ("df1", "df2", "df3", "df4", "df5")
 DEFAULT_HANDLE = "_default"
+
+_UNSET = object()
 
 
 class OperationError(ValueError):
@@ -71,6 +82,12 @@ def block_by_id(wf: dict, node_id: str) -> Optional[dict]:
 
 def block_name(block: dict) -> str:
     return block.get("variableName") or block.get("variable_name") or block.get("id", "?")
+
+
+def node_type_id(block: dict) -> Optional[str]:
+    """The node's definition/type id — the platform mixes `typeId` and
+    `node_definition_id` across payloads."""
+    return block.get("typeId") or block.get("node_definition_id")
 
 
 def settings_list(block: dict) -> list[dict]:
@@ -117,15 +134,48 @@ def all_edge_ids(wf: dict) -> set[str]:
     return ids
 
 
-# ── Magic Node references (list of edge IDs, sometimes JSON-string-encoded) ──
+# ── Magic Node group fields (code + instructions + references) ───────────────
+# Verified against production (3,134 of 3,136 live Magic Nodes use this shape).
+# The Magic Node keeps its config in two `group` settings whose field_value is a
+# LIST of sub-field envelopes:
+#
+#   data_manipulation-magic_node-instructions_and_ref: [
+#       {field_name: …-instructions, field_value: <null | nested instructions_text>},
+#       {field_name: …-references,   field_value: [<edge_id>, …]},   # required
+#   ]
+#   data_manipulation-magic_node-code_section: [
+#       {field_name: …-code, field_value: "<python>", fieldLabel: "Code"},  # required
+#   ]
+#
+# Two gotchas this module hides from callers:
+#   1. references must be NESTED inside the instructions_and_ref group. A
+#      top-level references setting leaves the group's required `references`
+#      child empty → backend 'Missing a field - instructions_and_ref'.
+#   2. code_section deserializes to a pydantic CodeSection model: a bare string
+#      or an empty list is rejected ('Input should be a valid dictionary or
+#      instance of CodeSection') — it must carry the nested …-code envelope.
 
 
-def read_magic_references(block: dict) -> tuple[list[str], bool]:
-    """Returns (references, was_json_string)."""
-    entry = get_setting(block, MAGIC_REFS_FIELD)
-    if entry is None:
-        return [], False
-    value = entry.get("field_value")
+def _sub(name: str, value: Any, label: Optional[str] = None) -> dict:
+    """A group sub-field envelope (the inner shape stored in a group setting's
+    field_value list)."""
+    entry: dict = {"field_name": name, "field_value": value, "error": None}
+    if label is not None:
+        entry["fieldLabel"] = label
+    return entry
+
+
+def _group_children(entry: Optional[dict]) -> list:
+    value = entry.get("field_value") if entry else None
+    return value if isinstance(value, list) else []
+
+
+def _child(children: list, field_name: str) -> Optional[dict]:
+    return next((s for s in children if isinstance(s, dict) and s.get("field_name") == field_name), None)
+
+
+def _parse_references(value: Any) -> tuple[list[str], bool]:
+    """(references, was_json_string) from a references field_value."""
     if isinstance(value, str):
         try:
             parsed = json.loads(value)
@@ -137,8 +187,100 @@ def read_magic_references(block: dict) -> tuple[list[str], bool]:
     return [], False
 
 
+def instructions_group_children(block: dict, *, create: bool = False) -> list:
+    """The list of sub-field envelopes inside the instructions_and_ref group,
+    guaranteeing a `references` child. With create=True the group entry is made
+    if absent. Migrates a legacy top-level references entry into the group and
+    removes it (the canonical location is nested)."""
+    entry = get_setting(block, MAGIC_INSTRUCTIONS_GROUP)
+    if entry is None:
+        if not create:
+            return []
+        block.setdefault("settings_field_values", []).append(
+            sf(MAGIC_INSTRUCTIONS_GROUP, [_sub(MAGIC_INSTRUCTIONS_FIELD, None), _sub(MAGIC_REFS_FIELD, [])])
+        )
+        entry = get_setting(block, MAGIC_INSTRUCTIONS_GROUP)
+    children = entry.get("field_value")
+    if not isinstance(children, list):
+        children = []
+        entry["field_value"] = children
+    if _child(children, MAGIC_REFS_FIELD) is None:
+        legacy = get_setting(block, MAGIC_REFS_FIELD)
+        legacy_val = legacy.get("field_value") if legacy else []
+        children.append(_sub(MAGIC_REFS_FIELD, legacy_val if isinstance(legacy_val, (list, str)) else []))
+    # drop any stray top-level references entry — it belongs nested in this group
+    block["settings_field_values"] = [s for s in settings_list(block) if s.get("field_name") != MAGIC_REFS_FIELD]
+    return children
+
+
+def read_magic_references(block: dict) -> tuple[list[str], bool]:
+    """Returns (references, was_json_string). Reads the canonical nested location
+    (inside instructions_and_ref); falls back to a legacy top-level references
+    setting for nodes saved before the nested shape."""
+    sub = _child(_group_children(get_setting(block, MAGIC_INSTRUCTIONS_GROUP)), MAGIC_REFS_FIELD)
+    if sub is not None:
+        return _parse_references(sub.get("field_value"))
+    legacy = get_setting(block, MAGIC_REFS_FIELD)
+    if legacy is not None:
+        return _parse_references(legacy.get("field_value"))
+    return [], False
+
+
 def write_magic_references(block: dict, refs: list[str], as_json_string: bool) -> None:
-    set_setting(block, MAGIC_REFS_FIELD, json.dumps(refs) if as_json_string else refs)
+    """Write references into the canonical nested location, migrating/removing
+    any legacy top-level entry."""
+    children = instructions_group_children(block, create=True)
+    _child(children, MAGIC_REFS_FIELD)["field_value"] = json.dumps(refs) if as_json_string else refs
+
+
+def set_magic_code(block: dict, code: Any = _UNSET, instructions: Any = _UNSET) -> None:
+    """Write the Magic Node's Python code (and optional NL instructions) into the
+    canonical group envelopes the backend's CodeSection model requires,
+    preserving references. Pass code/instructions to set them; omit either to
+    leave it untouched."""
+    if instructions is not _UNSET:
+        children = instructions_group_children(block, create=True)
+        instr = _child(children, MAGIC_INSTRUCTIONS_FIELD)
+        instr_value = [_sub(MAGIC_INSTRUCTIONS_TEXT_FIELD, instructions)] if instructions is not None else None
+        if instr is None:
+            children.insert(0, _sub(MAGIC_INSTRUCTIONS_FIELD, instr_value))
+        else:
+            instr["field_value"] = instr_value
+    if code is not _UNSET:
+        set_setting(block, MAGIC_CODE_SECTION, [_sub(MAGIC_CODE_FIELD, code, "Code")])
+
+
+_MAGIC_CODE_KEYS = ("code", MAGIC_CODE_FIELD)
+_MAGIC_INSTRUCTION_KEYS = ("instructions", MAGIC_INSTRUCTIONS_TEXT_FIELD)
+
+
+def coerce_magic_settings(block: dict, settings: dict) -> dict:
+    """Translate convenience Magic Node keys into the canonical CodeSection /
+    instructions_and_ref envelopes, writing them onto the block, and return the
+    settings with those keys removed (the caller stores the rest normally).
+    No-op when the block isn't a Magic Node.
+
+    Accepts: `code` (or data_manipulation-magic_node-code) — the Python code;
+    `instructions` (or …-instructions_text) — an optional natural-language
+    prompt; `data_manipulation-magic_node-code_section` as either a convenience
+    string OR the already-shaped list (a list is passed through verbatim)."""
+    if node_type_id(block) != MAGIC_NODE:
+        return settings
+    code: Any = _UNSET
+    instructions: Any = _UNSET
+    remaining: dict = {}
+    for key, value in settings.items():
+        if key in _MAGIC_CODE_KEYS:
+            code = value
+        elif key == MAGIC_CODE_SECTION and isinstance(value, str):
+            code = value
+        elif key in _MAGIC_INSTRUCTION_KEYS:
+            instructions = value
+        else:
+            remaining[key] = value
+    if code is not _UNSET or instructions is not _UNSET:
+        set_magic_code(block, code=code, instructions=instructions)
+    return remaining
 
 
 # ── Block construction ───────────────────────────────────────────────────────

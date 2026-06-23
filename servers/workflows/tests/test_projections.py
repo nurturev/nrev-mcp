@@ -59,6 +59,72 @@ def test_scan_validation_flags_errors_and_bad_magic_refs():
     assert report["magic_reference_warnings"][0]["reference"] == "not-a-real-edge"
 
 
+def test_scan_validation_flags_unconfigured_downstream_node():
+    # A non-trigger node with an incoming edge but zero settings is the silent
+    # failure mode (e.g. an unconfigured Filter) — advisory, does not flip valid.
+    wf = {
+        "id": "wf-1",
+        "blocks": [
+            {
+                "id": "root",
+                "variableName": "Source",
+                "isTrigger": True,
+                "settings_field_values": [{"field_name": "q", "field_value": "x"}],
+                "toBlocks": [{"toBlockId": "flt", "edge_target_handle_condition": "_default"}],
+            },
+            {"id": "flt", "variableName": "Filter", "settings_field_values": [], "toBlocks": []},
+        ],
+    }
+    report = projections.scan_validation(wf)
+    assert report["valid"] is True  # advisory only
+    warned = report["unconfigured_warnings"]
+    assert len(warned) == 1 and warned[0]["node_id"] == "flt"
+    # the trigger root (has settings, no incoming edge) is not flagged
+    assert all(w["node_id"] != "root" for w in warned)
+
+
+def test_scan_validation_does_not_flag_configured_or_root_nodes():
+    wf = {
+        "id": "wf-1",
+        "blocks": [
+            {"id": "root", "isTrigger": True, "settings_field_values": [], "toBlocks": [{"toBlockId": "n2"}]},
+            {"id": "n2", "settings_field_values": [{"field_name": "x", "field_value": 1}], "toBlocks": []},
+        ],
+    }
+    report = projections.scan_validation(wf)
+    # root: no incoming edge → skipped; n2: has settings → skipped
+    assert report["unconfigured_warnings"] == []
+
+
+def test_slim_execution_flags_zero_row_nodes():
+    raw = {
+        "id": "exec-1",
+        "status": "completed",
+        "blockRuns": [
+            {"id": "ne-1", "workflowBlockId": "filter", "workflowBlockName": "Keep fits",
+             "status": "completed", "output": [{"file_info": {"rows_count": 0}}]},
+            {"id": "ne-2", "workflowBlockId": "search", "workflowBlockName": "Search",
+             "status": "completed", "output": [{"file_info": {"rows_count": 12}}]},
+        ],
+    }
+    slim = projections.slim_execution(raw)
+    assert [z["node_id"] for z in slim["zero_row_nodes"]] == ["filter"]
+    assert slim["warnings"] and "0 rows" in slim["warnings"][0]
+
+
+def test_slim_execution_no_warning_when_all_nodes_have_rows():
+    raw = {
+        "id": "exec-1",
+        "status": "completed",
+        "blockRuns": [
+            {"id": "ne-1", "workflowBlockId": "a", "status": "completed",
+             "output": [{"file_info": {"rows_count": 3}}]},
+        ],
+    }
+    slim = projections.slim_execution(raw)
+    assert "zero_row_nodes" not in slim and "warnings" not in slim
+
+
 def test_slim_definition_detail_truncates_options():
     detail = projections.slim_definition_detail(
         {

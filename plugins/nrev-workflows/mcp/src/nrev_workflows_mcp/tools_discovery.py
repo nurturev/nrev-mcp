@@ -178,6 +178,35 @@ def find_node(
     return {"nodes": ranking.rank(intent, items, limit), "catalog_size_scanned": len(items)}
 
 
+def _connection_field_name(node_definition_id: str) -> Optional[str]:
+    """The node's canonical connection field name — the settings field of type
+    `app_connection`. Pipedream connection field names follow no guessable
+    pattern (…-slack_connection_id, …-gmail, …-googleSheets_connection_id), so
+    callers must source them from the schema rather than construct them."""
+    try:
+        detail = projections.slim_definition_detail(api.get_node_definition(node_definition_id))
+    except Exception:
+        return None
+    return next((f.get("name") for f in detail.get("settings_fields") or [] if f.get("type") == "app_connection"), None)
+
+
+def _heal_connection_field(node_definition_id: str, settings: dict, exc: Exception) -> Optional[dict]:
+    """If a field-options call failed because the backend couldn't match a
+    connection in `settings` (the supplied connection field name doesn't match
+    this node type — a common caller mistake), remap the connection value onto
+    the node's real app_connection field. Returns repaired settings, or None
+    when the error isn't a connection mismatch or there's nothing to remap."""
+    if "no valid connection found" not in str(exc).lower():
+        return None
+    target = _connection_field_name(node_definition_id)
+    if not target or target in settings:
+        return None
+    for key, value in settings.items():
+        if value and "connection" in key.lower():
+            return {**{k: v for k, v in settings.items() if k != key}, target: value}
+    return None
+
+
 @mcp.tool()
 def get_field_options(
     node_definition_id: str,
@@ -193,18 +222,30 @@ def get_field_options(
 
     `settings`: current/prerequisite settings as {field_name: value} — required
     for cascading dropdowns (worksheet needs the sheet picked first; most
-    Pipedream dropdowns need the connection field set). `node_id` is optional
+    Pipedream dropdowns need the connection field set). Source the connection
+    field's NAME from describe_node/get_node_type — don't hand-build it; if a
+    mismatched connection field name causes "No valid connection found", the
+    tool repairs it from the node schema and retries once. `node_id` is optional
     (used for logging only — a placeholder UUID is fine and the node need not
     exist yet). `search` narrows large option lists server-side.
     """
-    settings_list = [{"field_name": k, "field_value": v} for k, v in (settings or {}).items()]
-    return api.field_options(
-        node_id or str(uuid.uuid4()),
-        node_definition_id,
-        field_name,
-        settings_list,
-        search=search,
-    )
+    settings = dict(settings or {})
+    nid = node_id or str(uuid.uuid4())
+
+    def _fetch(s: dict) -> dict:
+        return api.field_options(
+            nid, node_definition_id, field_name,
+            [{"field_name": k, "field_value": v} for k, v in s.items()],
+            search=search,
+        )
+
+    try:
+        return _fetch(settings)
+    except Exception as exc:
+        repaired = _heal_connection_field(node_definition_id, settings, exc)
+        if repaired is None:
+            raise
+        return _fetch(repaired)
 
 
 @mcp.tool()

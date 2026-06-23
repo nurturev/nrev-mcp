@@ -62,10 +62,25 @@ def slim_workflow(wf: dict) -> dict:
 
 def scan_validation(wf: dict) -> dict:
     """Client-side validation scan: config errors + Magic Node reference
-    sanity (refs must be edge IDs that actually exist)."""
+    sanity (refs must be edge IDs that actually exist) + an advisory nudge for
+    downstream nodes left entirely unconfigured.
+
+    `unconfigured_warnings` is ADVISORY — it does not flip `valid` to false. The
+    platform does not raise a config error for, say, a Filter node with no
+    condition: the workflow runs "successfully" but the node silently passes or
+    drops every row, starving everything downstream. We flag any non-trigger
+    node that has an incoming edge yet carries no settings at all, so the agent
+    can confirm it genuinely needs none before running."""
     node_errors = []
     magic_warnings = []
+    unconfigured_warnings = []
     edge_ids = shapes.all_edge_ids(wf)
+    has_incoming = {
+        e.get("toBlockId")
+        for b in shapes.blocks_of(wf)
+        for e in (b.get("toBlocks") or [])
+        if e.get("toBlockId")
+    }
     for b in shapes.blocks_of(wf):
         if b.get("node_config_error"):
             node_errors.append({"node_id": b.get("id"), "name": shapes.block_name(b), "error": b["node_config_error"]})
@@ -76,6 +91,19 @@ def scan_validation(wf: dict) -> dict:
                     magic_warnings.append(
                         {"node_id": b.get("id"), "reference": r, "problem": "not an existing edge id"}
                     )
+        if (
+            not shapes.settings_list(b)
+            and b.get("id") in has_incoming
+            and not _pick(b, "isTrigger", "is_trigger", default=False)
+        ):
+            unconfigured_warnings.append(
+                {
+                    "node_id": b.get("id"),
+                    "name": shapes.block_name(b),
+                    "problem": "no settings configured — may silently pass or drop all rows at "
+                    "runtime (no config error is raised). Confirm this node needs no configuration.",
+                }
+            )
     wf_error = _pick(wf, "workflowConfigError", "workflow_config_error")
     return {
         "valid": not wf_error and not node_errors and not magic_warnings,
@@ -83,6 +111,7 @@ def scan_validation(wf: dict) -> dict:
         "workflow_config_error": wf_error,
         "node_errors": node_errors,
         "magic_reference_warnings": magic_warnings,
+        "unconfigured_warnings": unconfigured_warnings,
     }
 
 
@@ -266,6 +295,24 @@ def slim_execution(raw: Any) -> dict:
             if isinstance(n, dict)
         ]
     out["is_running"] = str(out.get("status") or "").lower() in _RUNNING_STATUSES
+    # Silent-success guard: a node that finished cleanly but emitted 0 rows
+    # starves everything downstream — the run reports "complete" while having
+    # produced nothing (the misconfigured-node failure mode). Surface it so the
+    # agent inspects the pipeline before green-lighting a live run.
+    zero_row_nodes = [
+        {k: v for k, v in {"node_id": r.get("node_id"), "node_name": r.get("node_name")}.items() if v is not None}
+        for r in out.get("node_runs", [])
+        if r.get("row_count") == 0
+        and not r.get("error")
+        and str(r.get("status") or "").lower() not in _RUNNING_STATUSES
+    ]
+    if zero_row_nodes:
+        out["zero_row_nodes"] = zero_row_nodes
+        out["warnings"] = [
+            f"{len(zero_row_nodes)} node(s) completed but produced 0 rows — downstream nodes "
+            f"received no data, so terminal actions (Slack/Sheets/CRM) may not have run. Inspect "
+            f"these nodes' config and output (get_node_output) before launching a live run."
+        ]
     return {k: v for k, v in out.items() if v is not None}
 
 

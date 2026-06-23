@@ -196,6 +196,12 @@ def update_node_settings(
     column fields take a list of lists of those envelopes — shapes documented
     in the node-settings skill.
 
+    Magic Node shortcut: pass `code` (the Python source) and optionally
+    `instructions` (a natural-language prompt) and the tool builds the nested
+    code_section / instructions_and_ref envelopes the backend requires,
+    preserving the auto-maintained input references. Wire the Magic Node's input
+    edges (edit_workflow) before setting code so its references exist.
+
     Returns the node's updated settings plus the workflow validation report.
     """
     wf = api.get_workflow(workflow_id)
@@ -205,7 +211,9 @@ def update_node_settings(
     if replace:
         block["settings_field_values"] = []
     labels = labels or {}
-    for field_name, value in settings.items():
+    # Magic Node code/instructions need bespoke group shaping; everything else is
+    # a straight field_name → value upsert.
+    for field_name, value in shapes.coerce_magic_settings(block, settings).items():
         shapes.set_setting(block, field_name, value, labels.get(field_name))
     api.put_node(workflow_id, node_id, block)
     saved = api.get_workflow(workflow_id)
