@@ -64,10 +64,13 @@ time.
 
 Single-input nodes refuse a second `_default` edge. To combine streams, give a
 **Magic Node** multiple parents in one `add_node`: the engine wires them to
-`df1…df5` and maintains the references setting automatically. Describe the join
-in plain English in the Magic Node's prompt.
+`df1…df5` and maintains the references setting automatically (nested in the
+`instructions_and_ref` group, where the backend expects them). The Magic Node's
+**code** is set in a second step with `update_node_settings` (it needs the
+input edges in place first), NOT inline in `add_node`.
 
 ```json
+// Step 1 — graph: wire the inputs (auto-fills df1/df2 references)
 [
   {"op": "add_node", "ref": "people", "type_id": "<find_node('search people apollo')>",
    "name": "Find contacts", "settings": {"<title_field>": "VP Sales"}},
@@ -76,13 +79,24 @@ in plain English in the Magic Node's prompt.
    "name": "Load target accounts", "settings": {"<table_field>": "<accounts table_id>"}},
 
   {"op": "add_node", "ref": "join", "type_id": "<MAGIC_NODE id from find_node('transform join merge')>",
-   "name": "Match contacts to accounts", "parents": ["people", "accounts"],
-   "settings": {"<prompt_field>": "Join df1 (contacts) to df2 (target accounts) on company domain. Keep only contacts whose domain matches an account. Output contact columns plus account_tier."}}
+   "name": "Match contacts to accounts", "parents": ["people", "accounts"]}
 ]
 ```
 
+```python
+# Step 2 — code: pass `code` (Python) — the tool builds the CodeSection envelope.
+update_node_settings(workflow_id, join_node_id, settings={
+    "code": (
+        "merged = df1.merge(df2, on='domain', how='inner')\n"
+        "result = merged.assign(account_tier=merged['account_tier'])"
+    ),
+})
+# (Optionally pass instructions="..." for natural-language → Generate Code.)
+```
+
 `parents: ["people", "accounts"]` → `df1` = people, `df2` = accounts (order
-follows the parents array). Up to five inputs (`df1`…`df5`).
+follows the parents array). Up to five inputs (`df1`…`df5`). Code must assign a
+DataFrame to `result`; allowed imports: pandas, numpy, datetime, json, re, math.
 
 ---
 

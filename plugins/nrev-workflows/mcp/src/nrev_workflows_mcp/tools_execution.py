@@ -60,6 +60,13 @@ def run_workflow(
     A fully test-mode workflow runs without confirmation (inputs are truncated,
     spend is negligible). `est_rows` feeds the estimate shown on refusal.
 
+    DON'T green-light a live run on a silently-broken workflow: before
+    recommending or launching one, confirm the most recent test run actually
+    produced rows end to end — get_execution must report no `zero_row_nodes`
+    (and validate_workflow no `unconfigured_warnings`). A workflow that completes
+    on 0 rows looks "successful" while doing nothing; tell the user instead of
+    proceeding.
+
     Returns the execution_id; follow with get_execution(wait_seconds=...) to
     poll, then get_node_output per node to inspect data.
     """

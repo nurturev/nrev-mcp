@@ -16,6 +16,7 @@ not the node you're looking at. The single most important habit: **a
 | Symptom | Cause | Fix |
 |---|---|---|
 | Node `completed`, 0 output rows | Upstream filter removed everything, or input was empty in test mode | `get_node_output` on the PARENT; check filter conditions; confirm seed table has rows |
+| Run "succeeded" but terminal Slack/Sheets/CRM node didn't act | A mid-pipeline node emitted 0 rows, starving everything downstream — `get_execution` lists these under `zero_row_nodes` with a `warnings` note | Inspect the named node's config/output; do NOT recommend or launch a live run until the test run produces rows end to end |
 | Node `completed`, every row has an `error` value | Per-row failure (Pipedream/nrev_tables especially) — not surfaced at node level | Read the `error` column; usually a bad `{{template}}` or missing connection |
 | `{{column}}` renders literally / empty | Column doesn't exist upstream, or name mismatch (case, snake_case) | `get_node_output` on parent to see actual column names; fix the reference |
 | Numeric comparison always false | Template resolved to a string ("5" vs 5) | Cast to number in an upstream Magic Node before comparing |
@@ -27,7 +28,10 @@ not the node you're looking at. The single most important habit: **a
 | Symptom | Cause | Fix |
 |---|---|---|
 | `node_config_error` on a node | Required setting unset or wrong shape | `get_workflow(view="node")` to read it; reconfigure with `update_node_settings`; reshape per the node-settings skill |
+| Magic Node: "Input should be a valid dictionary or instance of CodeSection" | Code written as a bare string / empty list instead of the nested `code_section` envelope | Set the code via `update_node_settings(settings={"code": "..."})` — the tool builds the right shape (node-settings skill → Magic Node) |
+| Magic Node: "Missing a field - instructions_and_ref" | Input references stored top-level instead of nested in the group | Wire the df1..dfN input edges (`edit_workflow`) — references are auto-maintained in the nested location; re-`validate_workflow` |
 | `magic_reference_warnings` | Magic Node references an edge id that no longer exists (parent removed/rewired) | Re-add the input edge, or remove the stale reference by re-wiring; `validate_workflow` to confirm |
+| `unconfigured_warnings` (advisory) | A downstream node has no settings at all (e.g. a Filter with no condition) — runs without a config error but silently passes/drops every row | Configure the node (`update_node_settings`), or confirm it genuinely needs none before running |
 | `workflow_config_error` set | Graph-level problem (no start node, disconnected node, missing listener) | Ensure ≥1 start node; wire orphans; check `is_runable` |
 | `is_runable: false` | Workflow not yet valid to run | Resolve all node + workflow errors first |
 
