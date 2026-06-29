@@ -5,6 +5,25 @@ All notable changes to the `nrev-workflows` plugin. Format loosely follows
 the `version` in `plugins/nrev-workflows/.claude-plugin/plugin.json` (the field
 Claude Code uses for `/plugin update`).
 
+## [0.8.0]
+
+### Added
+- **Client-source attribution on outbound API calls.** Every backend request
+  from the MCP server now carries `X-Nrev-Client: nrev-mcp`, set once at the
+  shared `transport._send` choke point so it rides on every workflow-platform,
+  tables, and user-management call. This lets prod-alert triage attribute this
+  traffic deterministically instead of inferring it from the `python-httpx`
+  user-agent (which the backend heuristic maps to `nrev-lite`). Observability
+  signal only — never used for authz. Part of the cross-repo client-source-
+  attribution rollout; the backend reads `X-Nrev-Client` and falls back to the
+  UA heuristic when it's absent, so this is backward-compatible and the backend
+  ignores the header until its side ships.
+
+### Changed
+- Version fields realigned in lockstep across `plugin.json`, `marketplace.json`,
+  and both `pyproject.toml` copies. The marketplace catalog entry had drifted to
+  0.6.0 while plugin.json/pyproject were at 0.7.0; all now read 0.8.0.
+
 ## [0.7.0]
 
 ### Fixed
