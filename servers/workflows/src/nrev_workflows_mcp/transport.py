@@ -1,8 +1,8 @@
 """Shared HTTP plumbing for the workflow and tables APIs.
 
-One place to inject the JWT header and to surface API errors as a typed
-exception carrying the URL + response body, so every tool failure is
-actionable for the calling agent.
+One place to inject the JWT header (and the `X-Nrev-Client` client-source
+header) and to surface API errors as a typed exception carrying the URL +
+response body, so every tool failure is actionable for the calling agent.
 """
 from __future__ import annotations
 
@@ -14,6 +14,14 @@ import httpx
 from . import auth, config
 
 TIMEOUT_SECONDS = float(os.environ.get("NREV_TIMEOUT", "60"))
+
+# Client-source attribution for prod-alert triage. Every backend call from this
+# MCP server (Claude Code / Cowork / Claude.ai -> nRev platform) carries this so
+# the backend attributes the traffic deterministically instead of guessing from
+# the python-httpx user-agent (which its heuristic would map to `nrev-lite`).
+# Observability signal only -- never used for authz. Parallel to gtm-engine's
+# NrvClient (`nrev-lite`) and its MCP server (`nrev-lite-mcp`).
+CLIENT_SOURCE = "nrev-mcp"
 
 
 class APIError(RuntimeError):
@@ -93,6 +101,8 @@ def _send(
         headers={
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
+            # Client-source attribution for prod-alert triage (observability only).
+            "X-Nrev-Client": CLIENT_SOURCE,
         },
         timeout=httpx.Timeout(TIMEOUT_SECONDS),
     ) as client:
