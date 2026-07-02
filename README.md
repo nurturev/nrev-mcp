@@ -48,11 +48,25 @@ nrev-mcp/
 /plugin install nrev-workflows@nrev
 ```
 
-Prereqs: Python 3.10+ and [uv](https://docs.astral.sh/uv/). Restart Claude
-Code after install; `/mcp` should show `nrev-workflows` with 44 tools.
+Prereqs: Python 3.10+ and [uv](https://docs.astral.sh/uv/) on `PATH` (uv
+fetches a suitable Python itself if none is present). Install uv:
+
+```
+# macOS / Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# Windows (PowerShell) — or: winget install --id=astral-sh.uv
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Works on macOS, Linux, and native Windows: the plugin starts the server by
+invoking `uv` directly (`.mcp.json` → `uv run …`), not through a shell script,
+and `uv` ships as a native binary (no `.cmd` shim), so no `cmd /c` wrapper is
+needed. Restart Claude Code after install; `/mcp` should show `nrev-workflows`
+(44 tools).
 
 First use — sign in once: tell Claude *"log in to nrev workflows"* (the
-`auth_login` tool) or run `plugins/nrev-workflows/bin/login.sh`. A browser opens
+`auth_login` tool — cross-platform) or, on macOS/Linux, run
+`plugins/nrev-workflows/bin/login.sh`. A browser opens
 for Google sign-in; the session is saved to `~/.nrev-workflows/credentials`
 (chmod 600) and **refreshed automatically**, so you never paste a JWT.
 Production by default (`NREV_ENV=staging` to switch). For CI, a pre-issued token
@@ -61,12 +75,20 @@ can be supplied via `set_jwt` / `NREV_JWT` — a manual override, not refreshed.
 ### Dev install (this repo cloned locally)
 
 ```
+# macOS / Linux — run-mcp.sh prefers the live servers/workflows checkout
 claude mcp add nrev-workflows --scope user -- /path/to/nrev-mcp/plugins/nrev-workflows/bin/run-mcp.sh
+
+# Windows — run-mcp.sh is a bash script and can't be spawned; point uv at the source directly
+claude mcp add nrev-workflows --scope user -- uv run --project C:\path\to\nrev-mcp\servers\workflows nrev-workflows-mcp
 ```
 
-The launcher prefers `servers/workflows` from the repo checkout, falling back
-to the bundled copy under `plugins/nrev-workflows/mcp/` (created by
-`scripts/sync-plugin.sh` — run it before tagging a release).
+On macOS/Linux the `run-mcp.sh` launcher prefers `servers/workflows` from the
+repo checkout (live source), falling back to the bundled copy under
+`plugins/nrev-workflows/mcp/`. On Windows, point `uv --project` at
+`servers\workflows` directly for the same live-source dev loop. The bundled
+copy is created by `scripts/sync-plugin.sh` — run it before tagging a release.
+(Installed plugins always run the bundled copy anyway: the extracted plugin has
+no `servers/` sibling, so the marketplace-install path is unaffected by the OS.)
 
 ## Versioning & releases
 
@@ -105,7 +127,7 @@ entry point.
 | `NREV_TIMEOUT` | `60` | HTTP timeout (seconds) |
 | `NREV_DOWNLOAD_DIR` | `~/.nrev-mcp/downloads` | download_node_output target |
 
-## Tool surface (38)
+## Tool surface (44)
 
 | Group | Tools |
 |---|---|
@@ -113,8 +135,8 @@ entry point.
 | Tenant | `get_active_tenant` (which tenant work is anchored to + the ones the user can switch among; read-only — never switches) |
 | Discovery | `search_nodes`, `find_node` (intent-ranked search), `get_node_type`, `describe_node` (schema + live options in one call), `get_field_options`, `list_connections`, `search_plays` |
 | Workflows | `list_workflows`, `get_workflow`, `create_workflow`, `edit_workflow` (batched graph ops), `update_node_settings`, `manage_variables`, `set_workflow_live`, `get_workflow_live_status` |
-| Execution | `validate_workflow`, `estimate_run_cost`, `run_workflow` (spend-gated), `run_node`, `get_execution` (with wait), `stop_execution`, `get_node_output`, `download_node_output` |
-| Tables | `list_tables`, `get_table`, `create_table`, `update_table`, `delete_table`, `get_table_rows`, `add_table_rows` |
+| Execution | `validate_workflow`, `estimate_run_cost`, `run_workflow` (spend-gated), `run_node`, `get_execution` (with wait), `stop_execution`, `get_node_output`, `download_node_output`, `check_node_errors` |
+| Tables | `list_tables`, `get_table`, `create_table`, `update_table`, `delete_table`, `get_table_rows`, `add_table_rows`, `update_table_rows`, `delete_table_rows`, `aggregate_table`, `get_distinct_values`, `join_tables` |
 | Knowledge base | `search_knowledge` (ranked retrieval), `get_knowledge_base` (full read + gaps), `save_knowledge` (reconciling merge upsert), `forget_knowledge` (guarded delete) |
 
 Design notes:
@@ -164,7 +186,7 @@ the platform web app's network tab and fix the wrapper in `api.py`:
 cd servers/workflows && uv run pytest
 ```
 
-46 unit tests cover the mutation engine, projections, and auth (session
+94 unit tests cover the mutation engine, projections, and auth (session
 persistence + refresh, network mocked) — no live calls. Live-API smoke testing
 is manual for now (POC).
 

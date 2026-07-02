@@ -5,6 +5,39 @@ All notable changes to the `nrev-workflows` plugin. Format loosely follows
 the `version` in `plugins/nrev-workflows/.claude-plugin/plugin.json` (the field
 Claude Code uses for `/plugin update`).
 
+## [0.8.1]
+
+### Fixed
+- **Windows: the plugin's MCP server now starts.** `.mcp.json` launched the
+  server through `bin/run-mcp.sh`, a bash script that Node's `child_process.spawn`
+  cannot execute on native Windows (the spawn path has no shell), so the server
+  never came up — it worked only on macOS/Linux. The launcher now invokes `uv`
+  directly (`"command": "uv"`, `"args": ["run", "--quiet", "--project",
+  "${CLAUDE_PLUGIN_ROOT}/mcp", "nrev-workflows-mcp"]`). `uv` is a native binary
+  (not a `.cmd` shim like `npx`), so it spawns without a `cmd /c` wrapper and
+  behaves identically on macOS, Linux, and Windows. Runtime-identical to what
+  `run-mcp.sh` did for installed plugins — the extracted plugin has no `servers/`
+  sibling, so it always ran the bundled `mcp/` copy anyway. `run-mcp.sh` and
+  `login.sh` are kept for the Unix dev-install path.
+- **`uv.lock` self-version drift.** The `nrev-workflows-mcp` package version had
+  fallen behind `pyproject.toml` in both lockfiles (`servers/workflows/uv.lock`
+  at 0.7.0, bundled `mcp/uv.lock` at 0.5.0); both now track the release version.
+  `sync-plugin.sh` copies the lock verbatim and the bump script didn't refresh
+  it, so it had gone stale.
+
+### Changed
+- **Tool count corrected to 44** across `plugin.json`, `marketplace.json`, and
+  the README tool-surface table — the table had drifted to 38 and the plugin
+  descriptions to 32. The six previously-undocumented tools are now listed:
+  `update_table_rows`, `delete_table_rows`, `aggregate_table`,
+  `get_distinct_values`, `join_tables` (Tables) and `check_node_errors`
+  (Execution).
+- **Plugin descriptions updated** from "per-user JWT auth" to browser sign-in
+  with auto-refresh (JWT is now only a manual CI override) — the auth model in
+  place since 0.3.0.
+- **Windows install & dev-install instructions** added to the README (uv via
+  PowerShell/winget; the direct-`uv` `claude mcp add` command for Windows dev).
+
 ## [0.8.0]
 
 ### Added
