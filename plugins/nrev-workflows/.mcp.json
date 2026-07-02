@@ -1,7 +1,14 @@
 {
   "mcpServers": {
     "nrev-workflows": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/bin/run-mcp.sh"
+      "command": "uv",
+      "args": [
+        "run",
+        "--quiet",
+        "--project",
+        "${CLAUDE_PLUGIN_ROOT}/mcp",
+        "nrev-workflows-mcp"
+      ]
     }
   }
 }
