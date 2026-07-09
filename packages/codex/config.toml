@@ -1,0 +1,16 @@
+# nrev-workflows MCP server for Codex CLI — manual (no-marketplace) install.
+#
+# Append this block to ~/.codex/config.toml, replacing the absolute path with
+# your checkout. This is the reliable path that does not depend on the Codex
+# plugin system; it points uv directly at the bundled server.
+#
+# Prereqs: Python 3.10+ and uv on PATH (uv fetches deps on first run).
+
+[mcp_servers.nrev-workflows]
+command = "uv"
+args = ["run", "--quiet", "--project", "/ABSOLUTE/PATH/TO/nrev-mcp/packages/codex/mcp", "nrev-workflows-mcp"]
+# For a repo checkout you can point at the live source instead:
+# args = ["run", "--quiet", "--project", "/ABSOLUTE/PATH/TO/nrev-mcp/servers/workflows", "nrev-workflows-mcp"]
+
+# Optional environment overrides:
+# env = { NREV_ENV = "staging" }

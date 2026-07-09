@@ -1,0 +1,12 @@
+{
+  "name": "nrev-workflows",
+  "version": "0.8.1",
+  "description": "Build, debug, and operate nRev GTM workflows from Gemini CLI — task-oriented MCP tools plus domain skills. Browser sign-in with auto-refresh, no secrets bundled.",
+  "contextFileName": "GEMINI.md",
+  "mcpServers": {
+    "nrev-workflows": {
+      "command": "uv",
+      "args": ["run", "--quiet", "--project", "${extensionPath}${/}mcp", "nrev-workflows-mcp"]
+    }
+  }
+}

@@ -29,16 +29,16 @@ nrev-mcp/
 │       │   ├── tenant.py             # active-tenant pin + mid-session drift detection
 │       │   └── tools_*.py            # 44 MCP tools in 7 modules
 │       └── tests/                    # pure-logic unit tests (no network)
-├── plugins/
-│   └── nrev-workflows/               # Claude plugin: MCP config + 10 skills
-│       ├── .mcp.json                 # launches bin/run-mcp.sh (stdio via uv)
-│       ├── bin/                      # run-mcp.sh + login.sh (one-time auth login)
-│       └── skills/                   # building-workflows, node-settings,
-│                                     # workflow-examples, troubleshooting,
-│                                     # list-building, qualification…,
-│                                     # research, content-generation,
-│                                     # gtm-automations, nomination
-└── scripts/sync-plugin.sh            # bundle server into plugin for releases
+├── shared/                           # ⭐ single source of truth (edit here)
+│   ├── skills/                       # 10 SKILL.md domain skills (open format)
+│   └── AGENTS.md                     # always-on agent context (thin)
+├── packages/                         # one uniform package per agent (committed)
+│   ├── claude/                       # Claude: .claude-plugin/ + .mcp.json + bin/ + skills/ + mcp/
+│   ├── codex/                        # Codex:  plugin.json + config.toml + skills/ + mcp/
+│   └── gemini/                       # Gemini: gemini-extension.json + skills/ + mcp/
+└── scripts/
+    ├── sync-agents.sh                # ⭐ fan shared/ → every agent package (skills/ + mcp/)
+    └── bump-version.sh               # stamp versions in lockstep
 ```
 
 ## Install (Claude Code)
@@ -66,7 +66,7 @@ needed. Restart Claude Code after install; `/mcp` should show `nrev-workflows`
 
 First use — sign in once: tell Claude *"log in to nrev workflows"* (the
 `auth_login` tool — cross-platform) or, on macOS/Linux, run
-`plugins/nrev-workflows/bin/login.sh`. A browser opens
+`packages/claude/bin/login.sh`. A browser opens
 for Google sign-in; the session is saved to `~/.nrev-workflows/credentials`
 (chmod 600) and **refreshed automatically**, so you never paste a JWT.
 Production by default (`NREV_ENV=staging` to switch). For CI, a pre-issued token
@@ -76,7 +76,7 @@ can be supplied via `set_jwt` / `NREV_JWT` — a manual override, not refreshed.
 
 ```
 # macOS / Linux — run-mcp.sh prefers the live servers/workflows checkout
-claude mcp add nrev-workflows --scope user -- /path/to/nrev-mcp/plugins/nrev-workflows/bin/run-mcp.sh
+claude mcp add nrev-workflows --scope user -- /path/to/nrev-mcp/packages/claude/bin/run-mcp.sh
 
 # Windows — run-mcp.sh is a bash script and can't be spawned; point uv at the source directly
 claude mcp add nrev-workflows --scope user -- uv run --project C:\path\to\nrev-mcp\servers\workflows nrev-workflows-mcp
@@ -84,16 +84,48 @@ claude mcp add nrev-workflows --scope user -- uv run --project C:\path\to\nrev-m
 
 On macOS/Linux the `run-mcp.sh` launcher prefers `servers/workflows` from the
 repo checkout (live source), falling back to the bundled copy under
-`plugins/nrev-workflows/mcp/`. On Windows, point `uv --project` at
+`packages/claude/mcp/`. On Windows, point `uv --project` at
 `servers\workflows` directly for the same live-source dev loop. The bundled
-copy is created by `scripts/sync-plugin.sh` — run it before tagging a release.
+copy is created by `scripts/sync-agents.sh` — run it before tagging a release.
 (Installed plugins always run the bundled copy anyway: the extracted plugin has
 no `servers/` sibling, so the marketplace-install path is unaffected by the OS.)
+
+## Multi-agent support (Codex CLI, Gemini CLI)
+
+The MCP server is a standard **stdio** server, so it is client-agnostic — Codex
+and Gemini speak the same protocol as Claude Code. The 10 domain skills are in
+the open **Agent Skills** (`SKILL.md`) format that Claude Code, Codex, and
+Gemini all read (same `name`/`description` frontmatter, same progressive
+disclosure). So skills and docs are authored **once** in `shared/` and fanned
+out to one uniform package per agent under `packages/`:
+
+```
+scripts/sync-agents.sh            # --build (default): regenerate all packages
+scripts/sync-agents.sh --link-dev # symlink shared/skills into each agent's live
+                                   # skills dir (~/.claude, ~/.agents, ~/.gemini)
+```
+
+- **Claude Code** — `packages/claude/`. Installed via the plugin marketplace
+  (`nrev-workflows@nrev`); the marketplace `source` points here.
+- **Codex CLI** — `packages/codex/`. Drop `skills/` into `~/.agents/skills/` and
+  add the `config.toml` block to `~/.codex/config.toml` — see
+  [`packages/codex/README.md`](packages/codex/README.md).
+- **Gemini CLI** — `packages/gemini/`. `gemini extensions install
+  ./packages/gemini` — see [`packages/gemini/README.md`](packages/gemini/README.md).
+
+**Editing rule:** only ever edit `shared/skills/` and `shared/AGENTS.md`, then
+run `sync-agents.sh`. Within each `packages/<agent>/`, `skills/` and `mcp/` are
+generated; the manifest (`.claude-plugin/` / `plugin.json` / `config.toml` /
+`gemini-extension.json`) is hand-authored. All of it is committed (installers
+fetch from the repo) — but never hand-edit `skills/` or `mcp/`. Two packaging
+details still need a live smoke test before external distribution: the Codex
+`plugin.json` schema and Gemini's subdir install + `${extensionPath}` variable
+(each package README flags it).
 
 ## Versioning & releases
 
 The authoritative version for **Claude Code** update detection is the `version`
-in `plugins/nrev-workflows/.claude-plugin/plugin.json` — it wins over the
+in `packages/claude/.claude-plugin/plugin.json` — it wins over the
 marketplace entry, and `/plugin update` does a semver comparison against it
 (strict `MAJOR.MINOR.PATCH`, no leading `v`). **Claude Cowork** instead tracks
 the git commit of the synced repo, so a fresh tagged commit is what it picks up;
@@ -101,10 +133,11 @@ the version field is informational there. The bundled MCP server's
 `pyproject.toml` version is invisible to Claude Code — kept aligned only for
 tidiness / eventual PyPI publish.
 
-To cut a release, bump all four version fields in lockstep and tag:
+To cut a release, bump every version field in lockstep and tag:
 
 ```
-scripts/bump-version.sh 0.3.0     # plugin.json + marketplace.json + pyproject, then re-syncs bundle
+scripts/bump-version.sh 0.3.0     # plugin.json + marketplace.json + pyproject +
+                                  # codex/gemini manifests, then re-syncs all packages
 # update CHANGELOG.md
 git commit -am "Release 0.3.0" && git tag v0.3.0 && git push --follow-tags
 ```

@@ -5,7 +5,7 @@
 #   1. Repo checkout: the server source lives at <repo>/servers/workflows —
 #      preferred during development (single source of truth).
 #   2. Marketplace install: only the plugin directory is present, so the
-#      server is bundled at <plugin>/mcp (kept in sync by scripts/sync-plugin.sh).
+#      server is bundled at <plugin>/mcp (kept in sync by scripts/sync-agents.sh).
 #
 # Requires `uv` (https://docs.astral.sh/uv/) — it resolves dependencies on
 # first run; no manual pip install.

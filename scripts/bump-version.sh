@@ -11,10 +11,12 @@
 # — we keep it aligned only for tidiness / eventual PyPI publish.
 #
 # Files updated:
-#   plugins/nrev-workflows/.claude-plugin/plugin.json   (AUTHORITATIVE)
+#   packages/claude/.claude-plugin/plugin.json          (AUTHORITATIVE)
 #   .claude-plugin/marketplace.json                     (catalog entry, kept in sync)
 #   servers/workflows/pyproject.toml                    (MCP package, independent of CC)
-#   plugins/nrev-workflows/mcp/pyproject.toml           (propagated by sync-plugin.sh)
+#   packages/codex/plugin.json                          (Codex manifest)
+#   packages/gemini/gemini-extension.json               (Gemini manifest)
+#   packages/*/mcp/pyproject.toml                       (propagated by sync-agents.sh)
 set -euo pipefail
 
 VERSION="${1:-}"
@@ -24,17 +26,19 @@ if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PLUGIN_JSON="$REPO_ROOT/plugins/nrev-workflows/.claude-plugin/plugin.json"
+PLUGIN_JSON="$REPO_ROOT/packages/claude/.claude-plugin/plugin.json"
 MARKET_JSON="$REPO_ROOT/.claude-plugin/marketplace.json"
 SERVER_PYPROJECT="$REPO_ROOT/servers/workflows/pyproject.toml"
+PKG_CODEX="$REPO_ROOT/packages/codex/plugin.json"
+PKG_GEMINI="$REPO_ROOT/packages/gemini/gemini-extension.json"
 
 # Surgical regex edits — change ONLY the version string, leaving each file's
 # formatting untouched (no JSON reserialization, no diff noise). Both JSON files
 # carry exactly one `"version"` key for the single nrev-workflows plugin; the
 # pyproject carries one `version =` line under [project].
-python3 - "$VERSION" "$PLUGIN_JSON" "$MARKET_JSON" "$SERVER_PYPROJECT" <<'PY'
+python3 - "$VERSION" "$PLUGIN_JSON" "$MARKET_JSON" "$SERVER_PYPROJECT" "$PKG_CODEX" "$PKG_GEMINI" <<'PY'
 import re, sys
-version, plugin_path, market_path, pyproject_path = sys.argv[1:5]
+version, plugin_path, market_path, pyproject_path, codex_path, gemini_path = sys.argv[1:7]
 
 def sub(path, pattern, repl):
     text = open(path).read()
@@ -46,10 +50,13 @@ def sub(path, pattern, repl):
 sub(plugin_path, r'("version":\s*")[^"]*(")', rf'\g<1>{version}\g<2>')
 sub(market_path, r'("version":\s*")[^"]*(")', rf'\g<1>{version}\g<2>')
 sub(pyproject_path, r'(?m)^(version = ")[^"]*(")', rf'\g<1>{version}\g<2>')
+sub(codex_path, r'("version":\s*")[^"]*(")', rf'\g<1>{version}\g<2>')
+sub(gemini_path, r'("version":\s*")[^"]*(")', rf'\g<1>{version}\g<2>')
 PY
 
-# Propagate the bundled MCP copy (includes its pyproject.toml).
-bash "$REPO_ROOT/scripts/sync-plugin.sh"
+# Propagate the bundled MCP copy + skills to every agent package.
+bash "$REPO_ROOT/scripts/sync-agents.sh" --build
 
-echo "bumped to $VERSION across plugin.json, marketplace.json, and pyproject (bundle re-synced)"
+echo "bumped to $VERSION across plugin.json, marketplace.json, pyproject, and the"
+echo "codex + gemini manifests (all agent packages re-synced)"
 echo "next: update CHANGELOG.md, commit, then: git tag v$VERSION"
