@@ -92,6 +92,8 @@ no `servers/` sibling, so the marketplace-install path is unaffected by the OS.)
 
 ## Multi-agent support (Codex CLI, Gemini CLI)
 
+> **Full architecture & maintenance guide:** [`docs/multi-agent-packaging.md`](docs/multi-agent-packaging.md).
+
 The MCP server is a standard **stdio** server, so it is client-agnostic — Codex
 and Gemini speak the same protocol as Claude Code. The 10 domain skills are in
 the open **Agent Skills** (`SKILL.md`) format that Claude Code, Codex, and
