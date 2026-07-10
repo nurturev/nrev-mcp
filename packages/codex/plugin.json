@@ -1,6 +1,6 @@
 {
   "name": "nrev-workflows",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "description": "Build, debug, and operate nRev GTM workflows from Codex — task-oriented MCP tools plus domain skills. Browser sign-in with auto-refresh, no secrets bundled.",
   "author": "NurtureV",
   "homepage": "https://github.com/nurturev/nrev-mcp",

@@ -5,7 +5,7 @@ All notable changes to the `nrev-workflows` plugin. Format loosely follows
 the `version` in `packages/claude/.claude-plugin/plugin.json` (the field
 Claude Code uses for `/plugin update`).
 
-## [Unreleased]
+## [0.9.0]
 
 ### Changed
 - **Multi-agent packaging.** Skills and always-on docs now live once in
@@ -14,15 +14,20 @@ Claude Code uses for `/plugin update`).
   Claude plugin moved from `plugins/nrev-workflows/` to `packages/claude/`
   (history-preserving) and the marketplace `source` now points there — the
   install identity `nrev-workflows@nrev`, the plugin format, and stored auth are
-  unchanged, so existing installs migrate transparently on their next
-  `/plugin update`. `sync-plugin.sh` was absorbed into `sync-agents.sh`.
+  unchanged, so existing installs migrate transparently on this `/plugin update`.
+  `sync-plugin.sh` was absorbed into `sync-agents.sh`, and `bump-version.sh` now
+  stamps the Codex/Gemini manifests too.
 
 ### Added
 - **Codex CLI** (`packages/codex/`) and **Gemini CLI** (`packages/gemini/`)
-  packages: the same open-format skills + bundled stdio MCP server, plus a
-  Codex `plugin.json`/`config.toml` and a Gemini `gemini-extension.json`. Two
-  packaging details (Codex manifest schema, Gemini subdir install) are flagged
-  in each package README pending a live smoke test.
+  packages — the same open-format skills + bundled stdio MCP server, plus a
+  Codex `plugin.json`/`config.toml` and a Gemini `gemini-extension.json`.
+  **Experimental:** the one-command installs depend on two packaging details
+  (Codex manifest schema, Gemini subdir install + `${extensionPath}`) that are
+  not yet smoke-tested against live CLIs — each package README flags them. The
+  Codex manual path (`~/.agents/skills/` + `config.toml`) is verified.
+- Maintainer guide `docs/multi-agent-packaging.md` (architecture, sync workflow,
+  how to add a new agent); design rationale in the `documentations` repo.
 
 ## [0.8.1]
 
