@@ -14,7 +14,7 @@
 #   packages/claude/.claude-plugin/plugin.json          (AUTHORITATIVE)
 #   .claude-plugin/marketplace.json                     (catalog entry, kept in sync)
 #   servers/workflows/pyproject.toml                    (MCP package, independent of CC)
-#   packages/codex/plugin.json                          (Codex manifest)
+#   packages/codex/.codex-plugin/plugin.json            (Codex manifest)
 #   packages/gemini/gemini-extension.json               (Gemini manifest)
 #   packages/*/mcp/pyproject.toml                       (propagated by sync-agents.sh)
 set -euo pipefail
@@ -29,7 +29,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLUGIN_JSON="$REPO_ROOT/packages/claude/.claude-plugin/plugin.json"
 MARKET_JSON="$REPO_ROOT/.claude-plugin/marketplace.json"
 SERVER_PYPROJECT="$REPO_ROOT/servers/workflows/pyproject.toml"
-PKG_CODEX="$REPO_ROOT/packages/codex/plugin.json"
+PKG_CODEX="$REPO_ROOT/packages/codex/.codex-plugin/plugin.json"
 PKG_GEMINI="$REPO_ROOT/packages/gemini/gemini-extension.json"
 
 # Surgical regex edits — change ONLY the version string, leaving each file's

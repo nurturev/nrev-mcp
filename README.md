@@ -34,7 +34,7 @@ nrev-mcp/
 │   └── AGENTS.md                     # always-on agent context (thin)
 ├── packages/                         # one uniform package per agent (committed)
 │   ├── claude/                       # Claude: .claude-plugin/ + .mcp.json + bin/ + skills/ + mcp/
-│   ├── codex/                        # Codex:  plugin.json + config.toml + skills/ + mcp/
+│   ├── codex/                        # Codex:  .codex-plugin/ + .mcp.json + bin/ + skills/ + mcp/
 │   └── gemini/                       # Gemini: gemini-extension.json + skills/ + mcp/
 └── scripts/
     ├── sync-agents.sh                # ⭐ fan shared/ → every agent package (skills/ + mcp/)
@@ -109,20 +109,21 @@ scripts/sync-agents.sh --link-dev # symlink shared/skills into each agent's live
 
 - **Claude Code** — `packages/claude/`. Installed via the plugin marketplace
   (`nrev-workflows@nrev`); the marketplace `source` points here.
-- **Codex CLI** — `packages/codex/`. Drop `skills/` into `~/.agents/skills/` and
-  add the `config.toml` block to `~/.codex/config.toml` — see
+- **Codex CLI / app** — `packages/codex/`, a native Codex plugin:
+  `codex plugin marketplace add https://github.com/nurturev/nrev-mcp.git`, then
+  `codex plugin add nrev-workflows@nrev` — see
   [`packages/codex/README.md`](packages/codex/README.md).
 - **Gemini CLI** — `packages/gemini/`. `gemini extensions install
   ./packages/gemini` — see [`packages/gemini/README.md`](packages/gemini/README.md).
 
 **Editing rule:** only ever edit `shared/skills/` and `shared/AGENTS.md`, then
 run `sync-agents.sh`. Within each `packages/<agent>/`, `skills/` and `mcp/` are
-generated; the manifest (`.claude-plugin/` / `plugin.json` / `config.toml` /
+generated; the manifest (`.claude-plugin/` / `.codex-plugin/` + `.mcp.json` /
 `gemini-extension.json`) is hand-authored. All of it is committed (installers
-fetch from the repo) — but never hand-edit `skills/` or `mcp/`. Two packaging
-details still need a live smoke test before external distribution: the Codex
-`plugin.json` schema and Gemini's subdir install + `${extensionPath}` variable
-(each package README flags it).
+fetch from the repo) — but never hand-edit `skills/` or `mcp/`. The Codex
+plugin path is smoke-tested against a live install; one packaging detail still
+needs a live smoke test before external distribution: Gemini's subdir install +
+`${extensionPath}` variable (the package README flags it).
 
 ## Versioning & releases
 

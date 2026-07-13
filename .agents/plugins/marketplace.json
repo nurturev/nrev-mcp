@@ -1,0 +1,16 @@
+{
+  "name": "nrev",
+  "interface": {
+    "displayName": "NurtureV"
+  },
+  "plugins": [
+    {
+      "name": "nrev-workflows",
+      "source": {
+        "source": "local",
+        "path": "./packages/codex"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

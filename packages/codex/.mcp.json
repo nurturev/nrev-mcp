@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "nrev-workflows": {
+      "command": "./bin/run-mcp.sh",
+      "args": [],
+      "cwd": "."
+    }
+  }
+}

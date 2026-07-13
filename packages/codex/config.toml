@@ -1,16 +1,21 @@
-# nrev-workflows MCP server for Codex CLI — manual (no-marketplace) install.
+# nrev-workflows MCP server for Codex CLI — manual (no-plugin) install.
 #
-# Append this block to ~/.codex/config.toml, replacing the absolute path with
-# your checkout. This is the reliable path that does not depend on the Codex
-# plugin system; it points uv directly at the bundled server.
+# The preferred install is the Codex plugin (see README.md) — it registers this
+# server automatically. Use this block only to register the server by hand:
+# append it to ~/.codex/config.toml, replacing the absolute path with your
+# checkout.
 #
-# Prereqs: Python 3.10+ and uv on PATH (uv fetches deps on first run).
+# Prereqs: Python 3.10+ and uv (the launcher finds uv in its standard install
+# locations; first launch resolves dependencies, which Codex permits — MCP
+# servers run outside the Codex sandbox with normal network access).
 
 [mcp_servers.nrev-workflows]
-command = "uv"
-args = ["run", "--quiet", "--project", "/ABSOLUTE/PATH/TO/nrev-mcp/packages/codex/mcp", "nrev-workflows-mcp"]
-# For a repo checkout you can point at the live source instead:
-# args = ["run", "--quiet", "--project", "/ABSOLUTE/PATH/TO/nrev-mcp/servers/workflows", "nrev-workflows-mcp"]
+command = "/ABSOLUTE/PATH/TO/nrev-mcp/packages/codex/bin/run-mcp.sh"
+args = []
+# First launch cold-resolves dependencies. Current Codex defaults to 30s
+# (older builds: 10s) — set the timeout explicitly so both work.
+startup_timeout_sec = 60
 
-# Optional environment overrides:
+# Codex strips the parent environment for MCP servers (only PATH, HOME, and a
+# small whitelist survive) — pass overrides explicitly:
 # env = { NREV_ENV = "staging" }
