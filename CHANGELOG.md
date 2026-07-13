@@ -5,6 +5,34 @@ All notable changes to the `nrev-workflows` plugin. Format loosely follows
 the `version` in `packages/claude/.claude-plugin/plugin.json` (the field
 Claude Code uses for `/plugin update`).
 
+## [0.9.1]
+
+### Fixed
+- **Codex: the MCP server now actually starts.** The 0.9.0 Codex path never
+  did: Codex consumed `packages/claude/` through its legacy `.claude-plugin`
+  marketplace compatibility and spawned `uv run --project
+  ${CLAUDE_PLUGIN_ROOT}/mcp` with the variable **unexpanded** (Codex does not
+  substitute variables in MCP configs), so the server died at spawn.
+  `packages/codex/` is now a **native Codex plugin** (Codex ≥ 0.117):
+  `.codex-plugin/plugin.json` (verified schema) + `.mcp.json` declaring the
+  server via a relative `command` + `cwd` resolved against the plugin root,
+  launched through `bin/run-mcp.sh` (Codex strips the environment to
+  PATH/HOME + a whitelist, and the desktop app's PATH may lack `uv` — the
+  launcher prepends the standard uv locations). A native marketplace catalog
+  was added at `.agents/plugins/marketplace.json` (takes precedence over the
+  legacy `.claude-plugin` one). Smoke-tested end to end against a live Codex
+  0.142 install: marketplace add → plugin add → server registers and
+  completes the MCP handshake in ~2s. Install:
+  `codex plugin marketplace add <repo>` + `codex plugin add
+  nrev-workflows@nrev`; existing installs: `codex plugin marketplace upgrade
+  nrev`, then reinstall the plugin.
+- **Docs: corrected the Codex launch model.** MCP servers are spawned
+  *outside* the Codex sandbox with full network access (verified against the
+  `openai/codex` source); the earlier "sandboxed server / install-once venv"
+  workaround (`scripts/setup-venv.sh`) was based on a wrong diagnosis and has
+  been removed. The manual no-plugin path remains: `~/.agents/skills/` +
+  the `config.toml` block pointing at `bin/run-mcp.sh`.
+
 ## [0.9.0]
 
 ### Changed
