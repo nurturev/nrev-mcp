@@ -10,7 +10,7 @@
       "source": "./packages/claude",
       "category": "productivity",
       "keywords": ["nrev", "workflow", "gtm", "mcp"],
-      "version": "0.9.1"
+      "version": "1.0.0"
     }
   ]
 }

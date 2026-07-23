@@ -86,6 +86,20 @@ def workflow_host() -> str:
     return _host("workflow", "NREV_WF_HOST")
 
 
+def wf_mcp_url() -> str:
+    """workflow_studio's embedded MCP server (Streamable HTTP) — the one-off
+    data tools federated by tools_data.py. Lives at /mcp on the workflow host.
+    ``NREV_WF_MCP_URL`` overrides the full URL (wins over host resolution).
+
+    Returned WITH a trailing slash on purpose. The server mounts the MCP app at
+    ``/mcp``, so a slash-less request 307-redirects to ``/mcp/``; behind a
+    TLS-terminating proxy that redirect downgrades the scheme to ``http://``,
+    which the MCP client then cannot connect to. Addressing ``/mcp/`` directly
+    never triggers the redirect."""
+    base = (os.environ.get("NREV_WF_MCP_URL") or f"{workflow_host()}/mcp").rstrip("/")
+    return base + "/"
+
+
 def tables_host() -> str:
     return _host("tables", "NREV_TABLES_HOST")
 

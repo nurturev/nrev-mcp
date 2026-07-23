@@ -1,10 +1,10 @@
 [project]
 name = "nrev-workflows-mcp"
-version = "0.9.1"
+version = "1.0.0"
 description = "MCP server for building and operating nRev workflows from AI agents (Claude Code, Cowork, Claude.ai)"
 requires-python = ">=3.10"
 dependencies = [
-    "mcp>=1.2.0",
+    "mcp>=1.8.0",
     "httpx>=0.27",
 ]
 
