@@ -3,20 +3,20 @@
 # session automatically, so you never paste a JWT again.
 #
 # Usage:
-#   bin/login.sh                 # production (default)
-#   bin/login.sh --staging       # staging environment
-#   bin/login.sh status          # show current session (any auth subcommand)
+#   scripts/login.sh                 # production (default)
+#   scripts/login.sh --staging       # staging environment
+#   scripts/login.sh status          # show current session (any auth subcommand)
 #
 # Mirrors run-mcp.sh: prefers the repo checkout, falls back to the bundled copy.
 set -euo pipefail
 
-PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-REPO_SERVER="$PLUGIN_ROOT/../../servers/workflows"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_SERVER="$REPO_ROOT/servers/workflows"
 
 if [ -f "$REPO_SERVER/pyproject.toml" ]; then
   TARGET="$REPO_SERVER"
 else
-  TARGET="$PLUGIN_ROOT/mcp"
+  TARGET="$REPO_ROOT/packages/claude/mcp"
 fi
 
 if ! command -v uv >/dev/null 2>&1; then

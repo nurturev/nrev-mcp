@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
-# Launch the nrev-workflows MCP server (stdio).
+# Launch the nrev-workflows MCP server (stdio), for local development.
 #
 # Two layouts supported:
 #   1. Repo checkout: the server source lives at <repo>/servers/workflows —
 #      preferred during development (single source of truth).
-#   2. Marketplace install: only the plugin directory is present, so the
-#      server is bundled at <plugin>/mcp (kept in sync by scripts/sync-agents.sh).
+#   2. Bundled copy: packages/claude/mcp (kept in sync by scripts/sync-agents.sh),
+#      used if servers/workflows isn't present.
 #
 # Requires `uv` (https://docs.astral.sh/uv/) — it resolves dependencies on
 # first run; no manual pip install.
 set -euo pipefail
 
-PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-REPO_SERVER="$PLUGIN_ROOT/../../servers/workflows"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_SERVER="$REPO_ROOT/servers/workflows"
 
 if [ -f "$REPO_SERVER/pyproject.toml" ]; then
   TARGET="$REPO_SERVER"
 else
-  TARGET="$PLUGIN_ROOT/mcp"
+  TARGET="$REPO_ROOT/packages/claude/mcp"
 fi
 
 if ! command -v uv >/dev/null 2>&1; then

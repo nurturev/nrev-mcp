@@ -65,8 +65,8 @@ needed. Restart Claude Code after install; `/mcp` should show `nrev-workflows`
 (44 tools).
 
 First use — sign in once: tell Claude *"log in to nrev workflows"* (the
-`auth_login` tool — cross-platform) or, on macOS/Linux, run
-`packages/claude/bin/login.sh`. A browser opens
+`auth_login` tool — cross-platform) or, on macOS/Linux with the repo cloned,
+run `scripts/login.sh`. A browser opens
 for Google sign-in; the session is saved to `~/.nrev-workflows/credentials`
 (chmod 600) and **refreshed automatically**, so you never paste a JWT.
 Production by default (`NREV_ENV=staging` to switch). For CI, a pre-issued token
@@ -76,7 +76,7 @@ can be supplied via `set_jwt` / `NREV_JWT` — a manual override, not refreshed.
 
 ```
 # macOS / Linux — run-mcp.sh prefers the live servers/workflows checkout
-claude mcp add nrev-workflows --scope user -- /path/to/nrev-mcp/packages/claude/bin/run-mcp.sh
+claude mcp add nrev-workflows --scope user -- /path/to/nrev-mcp/scripts/run-mcp.sh
 
 # Windows — run-mcp.sh is a bash script and can't be spawned; point uv at the source directly
 claude mcp add nrev-workflows --scope user -- uv run --project C:\path\to\nrev-mcp\servers\workflows nrev-workflows-mcp
