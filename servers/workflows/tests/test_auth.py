@@ -1,4 +1,4 @@
-"""Tests for the auth store: manual override + persistent auto-refreshing Supabase session."""
+"""Tests for the auth store: persistent, auto-refreshing Supabase session."""
 import base64
 import json
 import time
@@ -13,10 +13,6 @@ def clean(tmp_path, monkeypatch):
     # Isolate credentials on disk and the environment so tests are hermetic.
     monkeypatch.setenv("NREV_WORKFLOWS_DIR", str(tmp_path))
     monkeypatch.setenv("NREV_ENV", "staging")
-    monkeypatch.delenv("NREV_JWT", raising=False)
-    auth.reset()
-    yield
-    auth.reset()
 
 
 def make_jwt(exp_offset_seconds: int = 3600, **claims) -> str:
@@ -36,45 +32,13 @@ class _FakeResp:
         return self._payload
 
 
-# ── manual override (unchanged behaviour) ──────────────────────────────────
+# ── persistent Supabase session (stdio / local-file backend) ───────────────
 
 
 def test_unset_status_and_error():
     assert auth.status() == {"status": "unset"}
     with pytest.raises(auth.AuthError, match="JWT not set"):
         auth.get_jwt()
-
-
-def test_set_strips_bearer_prefix_and_decodes_exp():
-    token = make_jwt(600)
-    out = auth.set_jwt(f"Bearer {token}")
-    assert out["status"] == "set"
-    assert out["source"] == "manual"
-    assert out["expired"] is False
-    assert 8 <= out["expires_in_minutes"] <= 10
-    assert auth.get_jwt() == token
-
-
-def test_expired_token_flagged():
-    auth.set_jwt(make_jwt(-60))
-    assert auth.status()["expired"] is True
-
-
-def test_empty_token_rejected():
-    with pytest.raises(auth.AuthError):
-        auth.set_jwt("   ")
-
-
-def test_seed_from_env(monkeypatch):
-    monkeypatch.setenv("NREV_JWT", make_jwt())
-    assert auth.seed_from_env() is True
-    assert auth.status()["status"] == "set"
-    monkeypatch.setenv("NREV_JWT", "")
-    auth.reset()
-    assert auth.seed_from_env() is False
-
-
-# ── persistent Supabase session ─────────────────────────────────────────────
 
 
 def test_save_load_clear_credentials():
@@ -99,16 +63,9 @@ def test_status_reports_session_identity_from_claims():
     assert out["auto_refresh"] is True
 
 
-def test_get_jwt_uses_session_when_no_override():
+def test_get_jwt_uses_session():
     auth.save_credentials("acc", "ref", {}, time.time() + 3600)
     assert auth.get_jwt() == "acc"
-
-
-def test_override_wins_over_session():
-    auth.save_credentials("session-token", "ref", {}, time.time() + 3600)
-    auth.set_jwt("manual-token")
-    assert auth.get_jwt() == "manual-token"
-    assert auth.status()["source"] == "manual"
 
 
 def test_refresh_if_needed_returns_cached_when_fresh(monkeypatch):
