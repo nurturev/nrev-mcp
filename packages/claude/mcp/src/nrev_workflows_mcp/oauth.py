@@ -106,13 +106,16 @@ async def handle_webapp_callback(request: Request) -> Response:
         return _json_with_cors({"ok": True, "redirect_to": redirect_to})
 
     session_id = session_store.new_id()
-    claims = auth.decode_claims(body["access_token"])
+    # The web app's target=workflow handoff (same one login.py uses) sends
+    # email/tenant_id directly in the body — mirror login.py's own handler
+    # rather than decoding the JWT, which isn't guaranteed to carry these as
+    # claims.
     session_store.save_session(
         session_id,
         {
             "access_token": body["access_token"],
             "refresh_token": body.get("refresh_token", ""),
-            "user_info": {"email": claims.get("email"), "tenant": claims.get("tenant_id")},
+            "user_info": {"email": body.get("email"), "tenant": body.get("tenant_id")},
             "expires_at": _handoff_expires_at(body),
             "env": config.env_name(),
             "um_url": config.um_url(),

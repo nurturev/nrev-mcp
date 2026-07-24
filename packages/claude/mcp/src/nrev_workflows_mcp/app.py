@@ -74,6 +74,15 @@ if _HOSTED:
     mcp = FastMCP(
         "nrev-workflows",
         instructions=INSTRUCTIONS,
+        # FastMCP.__init__ has hardcoded Python-level defaults for host/port
+        # ("127.0.0.1", 8000) that it force-passes into its internal Settings
+        # object — that shadows Settings' own FASTMCP_HOST/FASTMCP_PORT
+        # env-var support entirely unless we pass them explicitly here.
+        # Verified by actually running the server: with only the env vars
+        # set (no explicit host=/port=), it silently bound to 127.0.0.1:8000
+        # regardless — unreachable from outside the pod.
+        host=os.environ.get("FASTMCP_HOST", "127.0.0.1"),
+        port=int(os.environ.get("FASTMCP_PORT", "8000")),
         auth_server_provider=NrevOAuthProvider(),
         auth=AuthSettings(
             issuer_url=_issuer,
@@ -87,5 +96,27 @@ if _HOSTED:
     mcp.custom_route("/oauth/webapp-callback", methods=["POST", "OPTIONS"])(
         handle_webapp_callback
     )
+
+    # Kubernetes probes — the mcp SDK has no built-in health route, and a
+    # probe obviously shouldn't need an OAuth token, so these use
+    # custom_route too (unauthenticated by design, per its own docstring).
+    @mcp.custom_route("/healthCheck", methods=["GET"])
+    async def _health_check(request):
+        from starlette.responses import JSONResponse
+
+        return JSONResponse({"status": "ok"})
+
+    @mcp.custom_route("/readiness", methods=["GET"])
+    async def _readiness(request):
+        from starlette.responses import JSONResponse
+
+        from . import session_store
+
+        try:
+            session_store.ping()
+        except Exception as exc:
+            return JSONResponse({"status": "not_ready", "error": str(exc)}, status_code=503)
+        return JSONResponse({"status": "ready"})
+
 else:
     mcp = FastMCP("nrev-workflows", instructions=INSTRUCTIONS)

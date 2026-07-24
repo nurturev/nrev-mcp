@@ -167,6 +167,11 @@ def test_webapp_callback_success_stores_session_and_redirects_to_original_client
                     "access_token": "sb-access",
                     "refresh_token": "sb-refresh",
                     "expires_in": 3600,
+                    # Real shape sent by the web app's target=workflow handoff
+                    # (WorkflowCliCallbackPayload) — same fields login.py's own
+                    # handler reads directly, not via JWT decode.
+                    "email": "user@nurturev.com",
+                    "tenant_id": "137",
                 }
             )
         )
@@ -188,6 +193,11 @@ def test_webapp_callback_success_stores_session_and_redirects_to_original_client
     # The underlying nRev session was persisted.
     assert fake_store["sessions"]["sess-new"]["access_token"] == "sb-access"
     assert fake_store["sessions"]["sess-new"]["refresh_token"] == "sb-refresh"
+    # email/tenant_id come straight from the body, not JWT-decoded.
+    assert fake_store["sessions"]["sess-new"]["user_info"] == {
+        "email": "user@nurturev.com",
+        "tenant": "137",
+    }
 
     # Our minted auth code carries the session id as its subject.
     code = parsed["code"][0]
