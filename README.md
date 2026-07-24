@@ -14,11 +14,15 @@ nrev-mcp/
 ├── servers/
 │   └── workflows/                    # MCP server: workflow platform + tables service
 │       ├── src/nrev_workflows_mcp/
-│       │   ├── server.py             # entrypoint (stdio)
+│       │   ├── server.py             # stdio entrypoint (local / Claude Code CLI)
+│       │   ├── server_http.py        # hosted entrypoint (streamable-http + OAuth, e.g. Cowork)
 │       │   ├── app.py                # FastMCP instance + server instructions
-│       │   ├── auth.py               # persistent auto-refreshing session + manual override
+│       │   ├── auth.py               # persistent auto-refreshing session (local file or hosted session store)
+│       │   ├── oauth.py              # OAuth 2.1 authorization server for the hosted transport
+│       │   ├── session_store.py      # Redis-backed session/token store (hosted transport only)
+│       │   ├── request_state.py      # per-request identity seam (hosted transport only)
 │       │   ├── config.py             # env (prod/staging) + host + credential-path resolution
-│       │   ├── login.py              # browser sign-in relayed via the web app
+│       │   ├── login.py              # browser sign-in relayed via the web app (stdio transport)
 │       │   ├── cli.py                # `nrev-workflows auth login|logout|status`
 │       │   ├── transport.py          # shared HTTP core (refresh + retry on 401)
 │       │   ├── api.py                # workflow platform REST wrappers
@@ -27,7 +31,8 @@ nrev-mcp/
 │       │   ├── projections.py        # compact views of large API payloads
 │       │   ├── um_api.py             # user-management REST wrappers (tenancy + knowledge base)
 │       │   ├── tenant.py             # active-tenant pin + mid-session drift detection
-│       │   └── tools_*.py            # 44 MCP tools in 7 modules
+│       │   └── tools_*.py            # 43 MCP tools in 7 modules
+│       ├── Dockerfile                # image for the hosted (streamable-http) transport
 │       └── tests/                    # pure-logic unit tests (no network)
 ├── shared/                           # ⭐ single source of truth (edit here)
 │   ├── skills/                       # 10 SKILL.md domain skills (open format)
@@ -62,15 +67,20 @@ Works on macOS, Linux, and native Windows: the plugin starts the server by
 invoking `uv` directly (`.mcp.json` → `uv run …`), not through a shell script,
 and `uv` ships as a native binary (no `.cmd` shim), so no `cmd /c` wrapper is
 needed. Restart Claude Code after install; `/mcp` should show `nrev-workflows`
-(44 tools).
+(43 tools).
 
 First use — sign in once: tell Claude *"log in to nrev workflows"* (the
 `auth_login` tool — cross-platform) or, on macOS/Linux with the repo cloned,
 run `scripts/login.sh`. A browser opens
 for Google sign-in; the session is saved to `~/.nrev-workflows/credentials`
 (chmod 600) and **refreshed automatically**, so you never paste a JWT.
-Production by default (`NREV_ENV=staging` to switch). For CI, a pre-issued token
-can be supplied via `set_jwt` / `NREV_JWT` — a manual override, not refreshed.
+Production by default (`NREV_ENV=staging` to switch).
+
+A hosted, OAuth-authenticated variant (`nrev-workflows-mcp-http`, see
+`servers/workflows/server_http.py`) also exists for remote-MCP-only clients
+like Cowork, which can't spawn a local process — sign-in there is a normal
+"Connect" prompt in the client, reusing this same web app login under the
+hood. Staging-only for now; not yet a customer-facing install path.
 
 ### Dev install (this repo cloned locally)
 
@@ -154,7 +164,6 @@ entry point.
 | Env var | Default | Purpose |
 |---|---|---|
 | `NREV_ENV` | `prod` | Environment (`prod`/`staging`); derives the web-app, UM, workflow & tables hosts. The server otherwise follows the logged-in session's env. |
-| `NREV_JWT` | – | Manual override token at startup (else `auth_login` / `set_jwt`); not refreshed |
 | `NREV_WEBAPP_URL` | per `NREV_ENV` | Web app base — where sign-in is relayed from (overrides `NREV_ENV`) |
 | `NREV_UM_URL` | per `NREV_ENV` | user-management base — session refresh (overrides `NREV_ENV`) |
 | `NREV_WF_HOST` | per `NREV_ENV` | Workflow platform API (overrides `NREV_ENV`) |
@@ -163,11 +172,11 @@ entry point.
 | `NREV_TIMEOUT` | `60` | HTTP timeout (seconds) |
 | `NREV_DOWNLOAD_DIR` | `~/.nrev-mcp/downloads` | download_node_output target |
 
-## Tool surface (44)
+## Tool surface (43)
 
 | Group | Tools |
 |---|---|
-| Auth | `auth_login` (browser sign-in, auto-refresh), `set_jwt` (manual override), `get_auth_status` |
+| Auth | `auth_login` (browser sign-in, auto-refresh), `get_auth_status` |
 | Tenant | `get_active_tenant` (which tenant work is anchored to + the ones the user can switch among; read-only — never switches) |
 | Discovery | `search_nodes`, `find_node` (intent-ranked search), `get_node_type`, `describe_node` (schema + live options in one call), `get_field_options`, `list_connections`, `search_plays` |
 | Workflows | `list_workflows`, `get_workflow`, `create_workflow`, `edit_workflow` (batched graph ops), `update_node_settings`, `manage_variables`, `set_workflow_live`, `get_workflow_live_status` |

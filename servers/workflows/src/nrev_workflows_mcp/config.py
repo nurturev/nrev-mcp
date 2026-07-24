@@ -90,6 +90,33 @@ def tables_host() -> str:
     return _host("tables", "NREV_TABLES_HOST")
 
 
+def redis_host() -> str:
+    return os.environ.get("NREV_REDIS_HOST", "localhost")
+
+
+def redis_port() -> int:
+    return int(os.environ.get("NREV_REDIS_PORT", "6379"))
+
+
+def redis_password() -> "str | None":
+    return os.environ.get("NREV_REDIS_PASSWORD") or None
+
+
+def redis_ssl() -> bool:
+    return os.environ.get("NREV_REDIS_SSL", "").strip().lower() in ("1", "true", "yes")
+
+
+def hosted_issuer_url() -> str:
+    """Public HTTPS base URL of this deployment — used as the OAuth issuer
+    and resource-server identity. Only read on the hosted transport."""
+    url = os.environ.get("NREV_HOSTED_ISSUER_URL", "").strip()
+    if not url:
+        raise RuntimeError(
+            "NREV_HOSTED_ISSUER_URL is required for the hosted (streamable-http) transport."
+        )
+    return url.rstrip("/")
+
+
 def config_dir() -> Path:
     return Path(
         os.environ.get("NREV_WORKFLOWS_DIR") or (Path.home() / ".nrev-workflows")
