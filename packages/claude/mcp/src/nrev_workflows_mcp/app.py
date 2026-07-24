@@ -1,9 +1,23 @@
 """FastMCP application instance.
 
 Tool modules import `mcp` from here and register themselves with @mcp.tool().
-The entrypoint (server.py) imports the tool modules for their side effects.
+The entrypoints (server.py for stdio, server_http.py for hosted) import the
+tool modules for their side effects.
+
+Whether `mcp` is built with OAuth wired in is decided once, at import time,
+by the `NREV_TRANSPORT` env var — `auth_server_provider`/`auth` are
+constructor-only args on FastMCP, so this can't be retrofitted after the
+fact, and every `tools_*.py` module imports this single `mcp` singleton at
+decoration time, so there's exactly one instance to get right, not two.
+`server_http.py` sets `NREV_TRANSPORT=streamable-http` as its very first
+statement, before importing this module, so the stdio entrypoint
+(server.py) never needs to know this variable exists.
 """
+import os
+
 from mcp.server.fastmcp import FastMCP
+
+_HOSTED = os.environ.get("NREV_TRANSPORT") == "streamable-http"
 
 INSTRUCTIONS = """\
 Tools for building and operating workflows on the nRev GTM platform, plus the
@@ -50,4 +64,28 @@ gaps. save_knowledge persists learnings back (reconciling add/update in one
 call); forget_knowledge removes an entry.
 """
 
-mcp = FastMCP("nrev-workflows", instructions=INSTRUCTIONS)
+if _HOSTED:
+    from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, RevocationOptions
+
+    from . import config
+    from .oauth import NrevOAuthProvider, handle_webapp_callback
+
+    _issuer = config.hosted_issuer_url()
+    mcp = FastMCP(
+        "nrev-workflows",
+        instructions=INSTRUCTIONS,
+        auth_server_provider=NrevOAuthProvider(),
+        auth=AuthSettings(
+            issuer_url=_issuer,
+            resource_server_url=_issuer,
+            client_registration_options=ClientRegistrationOptions(enabled=True),
+            revocation_options=RevocationOptions(enabled=True),
+        ),
+    )
+    # The web app's relay POSTs here — deliberately unauthenticated (it's not
+    # an MCP tool call, it's the OAuth handoff itself). See oauth.py.
+    mcp.custom_route("/oauth/webapp-callback", methods=["POST", "OPTIONS"])(
+        handle_webapp_callback
+    )
+else:
+    mcp = FastMCP("nrev-workflows", instructions=INSTRUCTIONS)

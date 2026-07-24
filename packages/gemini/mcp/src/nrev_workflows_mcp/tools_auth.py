@@ -1,7 +1,7 @@
 """Auth + account tools."""
 from __future__ import annotations
 
-from . import api, auth, config
+from . import api, auth, config, request_state
 from . import login as login_mod
 from .app import mcp
 
@@ -11,16 +11,32 @@ def auth_login() -> dict:
     """Sign the user in to nRev. Call this whenever authentication is needed —
     when get_auth_status is unset/expired, or any tool returns 401.
 
-    It opens a sign-in page in the user's browser and completes on its own once
-    they finish; the session then refreshes automatically, so the user signs in
-    only once. Just call this tool, then tell the user to finish signing in in
-    the browser window that opens.
+    On the local/CLI transport this opens a sign-in page in the user's
+    browser and completes on its own once they finish; the session then
+    refreshes automatically, so the user signs in only once. Just call this
+    tool, then tell the user to finish signing in in the browser window that
+    opens.
 
     Do NOT ask the user which environment to use, and do NOT mention internal
     commands, file paths, or flags — those are deployment details, not user
     choices. If this call returns a timeout, the sign-in may still have
     completed: call get_auth_status to check before retrying.
     """
+    if request_state.hosted_identity() is not None:
+        # A hosted call reaching this point already has an invalid session —
+        # a valid one never calls auth_login (get_auth_status would report it
+        # as set). Unlike the local flow, the server has no way to re-trigger
+        # the *client's* own OAuth /authorize — that's the client's job, not
+        # something this tool can drive from inside a session that's already
+        # lost its credentials.
+        return {
+            "status": "error",
+            "error": "session_invalid",
+            "hint": (
+                "Tell the user to reconnect the nrev-workflows connector in "
+                "their Claude/Cowork connector settings to sign in again."
+            ),
+        }
     try:
         return login_mod.login()
     except login_mod.LoginError as exc:
@@ -29,16 +45,6 @@ def auth_login() -> dict:
             "error": str(exc),
             "hint": "Tell the user to complete the sign-in in the browser, then call get_auth_status.",
         }
-
-
-@mcp.tool()
-def set_jwt(token: str) -> dict:
-    """Advanced/automation fallback for supplying a pre-issued token (held in
-    memory only, not persisted). Prefer auth_login for normal sign-in — never ask
-    an end user to fetch a token by hand. Use this only when a token is explicitly
-    provided (e.g. CI). Accepts a bare token or a `Bearer <token>` value.
-    """
-    return auth.set_jwt(token)
 
 
 @mcp.tool()

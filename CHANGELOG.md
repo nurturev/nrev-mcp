@@ -5,6 +5,35 @@ All notable changes to the `nrev-workflows` plugin. Format loosely follows
 the `version` in `packages/claude/.claude-plugin/plugin.json` (the field
 Claude Code uses for `/plugin update`).
 
+## [Unreleased]
+
+### Added
+- **Hosted OAuth connector** (`nrev-workflows-mcp-http`, `servers/workflows/server_http.py`
+  + `oauth.py`). A streamable-http transport for remote-MCP-only clients
+  (Cowork and similar) that can't spawn a local `uv` process — installable
+  via a normal "Connect" prompt, no terminal or local setup required.
+  Implements a real OAuth 2.1 authorization server (dynamic client
+  registration, PKCE) whose `/authorize` step hands off to the *existing*
+  nRev web app login (`login.py`'s browser-relay flow) rather than
+  reimplementing authentication — the only new user-facing surface is the
+  OAuth "Connect" handshake itself. Session/token state lives in Redis
+  (`session_store.py`), scoped per customer, since the hosted transport runs
+  as a shared, multi-replica service rather than one process per user's
+  machine. Staging-only for now.
+- Fixed a latent multi-tenancy bug along the way: `auth.py`/`tenant.py` used
+  to keep session/tenant-pin state in module-level globals, safe only for a
+  single local process. Both now resolve state per-request on the hosted
+  transport (`request_state.hosted_identity()`), so concurrent customers on
+  a shared server can never see each other's session or pinned tenant. The
+  stdio/local transport is unchanged.
+
+### Removed
+- **BREAKING: removed the `set_jwt` tool and `NREV_JWT` env var** (the
+  manual JWT-paste escape hatch). Sign in via `auth_login` (stdio) or the
+  OAuth connector (hosted) — both now cover what `set_jwt`/`NREV_JWT` were a
+  workaround for, so the escape hatch no longer earns its complexity. If
+  anything in CI relied on `NREV_JWT`, it needs to switch to a real sign-in.
+
 ## [0.9.1]
 
 ### Fixed
