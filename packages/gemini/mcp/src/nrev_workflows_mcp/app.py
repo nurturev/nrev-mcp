@@ -23,6 +23,22 @@ INSTRUCTIONS = """\
 Tools for building and operating workflows on the nRev GTM platform, plus the
 nRev tables service (lightweight database the workflows read/write).
 
+Pick the path BEFORE you build anything — there are two, and the light one is
+usually right:
+- ONE-OFF ("get me this now", a single pull, exploratory/consultant-style ask,
+  no schedule): call list_data_tools and, if one covers the need, run it with
+  run_data_tool. No workflow. This is the DEFAULT for one-off data questions.
+- WORKFLOW (build): only when the user wants it to run REPEATEDLY, fire on a
+  TRIGGER, or chain multiple steps — or when no data tool covers the need and
+  the user agrees to the heavier build. Building a workflow to answer a one-off
+  question wastes time and credits; don't default to it just because the ask
+  involves data.
+The data tools are SEED-BASED (they enrich/scrape a known domain, LinkedIn URL,
+or company); list_data_tools is authoritative, so check it. If the ask is cold
+people/company SEARCH ("find me founders in India") and nothing there matches,
+that capability lives only in workflow search nodes — say so and let the user
+choose to build a search workflow, rather than silently building one.
+
 Protocol for building workflows (the `building-workflows` skill has the full
 version — load it when asked to build or edit a workflow):
 1. Ensure the user is signed in: call get_auth_status; if unset/expired, call
@@ -55,6 +71,12 @@ version — load it when asked to build or edit a workflow):
 Executions consume tenant credits: keep nodes in test mode while iterating.
 A full run_workflow with live nodes is refused without confirm=true — use
 estimate_run_cost and get the user's go-ahead before spending real credits.
+
+One-off data mechanics: run_data_tool's first call (confirm=false) returns a
+credit estimate instead of running, so show the user the cost and get their
+go-ahead before re-calling with confirm=true. Persist results with
+save_to_table, then OFFER to automate the pull as a workflow — don't assume the
+user wants one built.
 
 The tenant knowledge base holds the company's website, ICPs, personas,
 competitors, and product offering — the context AI nodes draw on. Before

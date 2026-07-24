@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from . import api, projections, ranking
+from . import api, config, projections, ranking
 from .app import mcp
 
 
@@ -268,6 +268,34 @@ def list_connections(connection_app_id: Optional[str] = None, apps_search: Optio
         raw = api.list_connection_apps(search=apps_search)
         return {"apps": raw.get("data", raw)}
     return {"connections": api.list_connections(connection_app_id)}
+
+
+@mcp.tool()
+def connect_app(connection_app_id: str) -> dict:
+    """Start connecting a NEW app account (Gmail, Slack, Sheets, HubSpot…) —
+    mints the hosted OAuth URL for the app and returns it. The URL must be
+    OPENED BY THE USER IN THEIR BROWSER to authorize the account (it expires,
+    so have them do it promptly); once they finish, verify with
+    list_connections(connection_app_id=...) that the new connection appears.
+
+    `connection_app_id` comes from list_connections(apps_search=...) — it is
+    the catalog id, not a connection id. Use this when a node needs an app the
+    tenant has no usable connection for yet.
+    """
+    landing = f"{config.webapp_url()}/connections"
+    raw = api.generate_connection_url(connection_app_id, landing, landing)
+    if not isinstance(raw, dict):
+        raw = {}
+    return {
+        "connect_url": projections._pick(raw, "connectUrl", "connect_url"),
+        "expires_in_seconds": projections._pick(raw, "expiresIn", "expires_in"),
+        "app_id": projections._pick(raw, "appId", "app_id"),
+        "instruction": (
+            "Give this URL to the user to open in their browser and authorize the "
+            "account. After they finish, confirm with list_connections that the "
+            "connection shows up, then use its connection_id in node settings."
+        ),
+    }
 
 
 @mcp.tool()

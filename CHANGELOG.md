@@ -34,6 +34,50 @@ Claude Code uses for `/plugin update`).
   workaround for, so the escape hatch no longer earns its complexity. If
   anything in CI relied on `NREV_JWT`, it needs to switch to a real sign-in.
 
+## [1.0.0]
+
+### Added
+- **One-off data federation** (`tools_data.py`). nrev-mcp is now an MCP
+  *client* of the workflow_studio data server (Streamable HTTP at
+  `<workflow_host>/mcp`, override `NREV_WF_MCP_URL`), re-exposing the
+  platform's tool-eligible nodes as direct "get me this data now" calls in
+  the same chat surface — no workflow required. `list_data_tools` discovers
+  the live set (nothing hard-coded — nodes made eligible upstream appear
+  automatically), `run_data_tool` forwards a call and surfaces the
+  server-enforced spend gate (a `confirm=false` call returns a credit
+  estimate instead of running; re-call with `confirm=true` after the user's
+  go-ahead), and `save_to_table` lands the returned records in an nRev Table
+  (finds or creates the target, derives `text`/`json` columns from the row
+  keys, reuses the tables column-resolver, per-row error capture) so a
+  one-off pull graduates into workflow-consumable storage. Auth rides the
+  same platform JWT as every other call, with the standard 401
+  refresh-and-retry.
+- **Workflow-builder parity tools.** `duplicate_workflow` (clones a build;
+  auto-derives "<name> (copy)"), `export_workflow` (GET
+  `/workflows/{id}/download-json` — full envelope + variables + referenced
+  table schemas, written to a local file), `import_workflow` (multipart
+  POST `/workflows/upload-json`), `stop_node_execution` (per-node stop),
+  `resume_execution` (the platform's update-and-resume),
+  `list_recent_executions` (global GET `/execution-logs` run history across
+  all workflows), `get_execution_stats` (GET `/execution-logs/stats` —
+  credits + executions with trend), the listener test lifecycle
+  (`activate_listener_test` / `get_listener_event` / `deactivate_listener` —
+  arm a webhook/trigger node, capture the real event payload, disarm), and
+  `connect_app` (POST `/connections/{app}/url` — mints the hosted OAuth URL
+  for the user to open in their browser). All endpoint paths and body/param
+  shapes verified against the web app's services and the backend routes.
+
+### Fixed
+- **`stop_execution` now works.** It called the predecessor's UNVERIFIED
+  `POST .../workflow-execution/{id}/abort`, which 404s; the platform's real
+  path is `POST .../workflow-execution/{id}/stop` (verified against the FE
+  WorkflowApiService). The long-standing UNVERIFIED flag in `api.py` is
+  cleared.
+
+### Changed
+- Tool count 44 → 58. The `mcp` dependency floor moves to `>=1.8.0`
+  (Streamable HTTP client for the federation).
+
 ## [0.9.1]
 
 ### Fixed

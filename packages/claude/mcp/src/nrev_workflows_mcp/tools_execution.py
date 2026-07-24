@@ -144,8 +144,76 @@ def get_execution(
 @mcp.tool()
 def stop_execution(workflow_id: str, execution_id: str) -> dict:
     """Stop a running execution — use when a run is misbehaving or burning
-    credits on bad data."""
-    return {"result": api.abort_execution(workflow_id, execution_id)}
+    credits on bad data. Confirm it actually stopped with
+    get_execution(execution_id) (status leaves the running set)."""
+    result = api.stop_execution(workflow_id, execution_id)
+    return {"stopped": True, "execution_id": execution_id, "result": result}
+
+
+@mcp.tool()
+def stop_node_execution(workflow_id: str, execution_id: str, node_execution_id: str) -> dict:
+    """Stop ONE node run inside an execution while letting the rest of the run
+    continue — the surgical version of stop_execution for when a single node
+    is stuck or burning credits. Get the node_execution_id from
+    get_execution's `node_runs`."""
+    result = api.stop_node_execution(workflow_id, execution_id, node_execution_id)
+    return {"stopped": True, "node_execution_id": node_execution_id, "result": result}
+
+
+@mcp.tool()
+def resume_execution(workflow_id: str, execution_id: str) -> dict:
+    """Resume a paused/stopped execution from where it left off (the platform's
+    update-and-resume). The platform also accepts an updated workflow envelope
+    with the resume; this tool resumes AS-IS — if the workflow needs fixing
+    first, apply the fix with edit_workflow / update_node_settings, then call
+    this. Returns the (new) execution_id to follow with get_execution."""
+    raw = api.resume_execution(workflow_id, execution_id)
+    exec_part = raw.get("execution") if isinstance(raw, dict) else None
+    exec_id = projections.extract_execution_id(exec_part if isinstance(exec_part, dict) else raw)
+    return {"execution_id": exec_id or execution_id, "status": "resumed"}
+
+
+@mcp.tool()
+def list_recent_executions(limit: int = 20, skip: int = 0, search: Optional[str] = None) -> dict:
+    """Run history across ALL workflows in the tenant (the web app's Run Logs
+    page) — "what ran recently / what's running / what failed overnight?"
+    without knowing which workflow to ask. `search` filters server-side.
+    Returns compact entries with workflow name/id, status, credits, and the
+    execution_id to inspect via get_execution(workflow_id, execution_id)."""
+    raw = api.list_global_executions(limit=limit, skip=skip, search=search)
+    data = raw.get("data") if isinstance(raw, dict) else raw
+    rows = [
+        {
+            k: v
+            for k, v in {
+                "execution_id": r.get("id"),
+                "workflow_id": r.get("workflowId"),
+                "workflow_name": r.get("workflowName"),
+                "status": r.get("status"),
+                "started_at": r.get("startedAt"),
+                "ended_at": r.get("endedAt"),
+                "duration": r.get("duration"),
+                "credits_used": r.get("creditsUsed"),
+                "node_execution_count": r.get("nodeExecutionCount"),
+            }.items()
+            if v is not None
+        }
+        for r in (data or [])
+        if isinstance(r, dict)
+    ]
+    out: dict = {"executions": rows}
+    if isinstance(raw, dict) and raw.get("meta"):
+        out["meta"] = raw["meta"]
+    return out
+
+
+@mcp.tool()
+def get_execution_stats(date_range: str = "last_month") -> dict:
+    """Tenant-wide execution stats: credits consumed and total executions,
+    each with a total, percent change vs the prior period, and a daily time
+    series — the "how much are we running/spending?" overview. `date_range`:
+    last_day | last_week | last_month | last_3_months."""
+    return api.execution_stats(date_range=date_range)
 
 
 @mcp.tool()

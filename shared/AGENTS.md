@@ -26,6 +26,28 @@ state, not carried in the token, so it can change mid-session if switched in the
 web app. This MCP never switches tenants itself. If a tool reports a tenant
 change, **halt** and confirm with the user before continuing.
 
+## Pick the path — one-off data vs building a workflow
+
+Not every request needs a workflow. Decide before you build:
+
+- **One-off data pull** — the default for exploratory / "get me this now" asks.
+  `list_data_tools` lists the direct data tools the platform exposes;
+  `run_data_tool` fetches the data with **no workflow**. First call
+  (`confirm=false`) returns a credit estimate — show it, get the go-ahead, then
+  re-call with `confirm=true`. Persist with `save_to_table`, then *offer* to
+  automate it as a workflow — don't assume they want one.
+- **Build a workflow** only when the user wants it to run **repeatedly**, fire
+  on a **trigger**, or chain multiple steps — or when no data tool covers the
+  need and the user agrees to the heavier build. Building a workflow to answer a
+  one-off question wastes time and credits.
+
+The data tools are **seed-based** — they enrich/scrape a known domain, LinkedIn
+URL, or company. `list_data_tools` is authoritative, so check it. If the ask is
+cold **people/company search** ("find me founders in India") and nothing there
+matches, that capability lives only in workflow **search nodes** today: tell the
+user a search workflow is the only path and let them choose — don't default to
+building one.
+
 ## Spend safety
 
 Executions consume tenant credits. Keep nodes in **test mode** while iterating.
