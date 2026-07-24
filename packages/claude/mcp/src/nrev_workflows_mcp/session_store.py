@@ -60,6 +60,12 @@ def _redis():
     return _client
 
 
+def ping() -> bool:
+    """Check Redis connectivity — used by the /readiness probe. Raises on
+    failure rather than swallowing it, so the caller can report *why*."""
+    return bool(_redis().ping())
+
+
 def _hash(token: str) -> str:
     """Hash a bearer token before using it as a Redis key — never store raw
     tokens at rest, even in a private cache."""
