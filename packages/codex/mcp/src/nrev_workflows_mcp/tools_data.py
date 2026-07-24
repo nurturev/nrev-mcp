@@ -16,6 +16,16 @@ Upstream contract: tools are named ``<node_type_id with . replaced by __>``
 server-side — with ``confirm=false`` the server returns a structured
 "blocked" result carrying a credit estimate instead of running. Auth is the
 same platform JWT every other call uses (``auth.get_jwt()``).
+
+A tool-call failure never raises out of ``run_data_tool`` — it comes back as
+``{"status": "error", "error_class", "message", "details"}`` (see
+``_error_payload``) so an agent has a stable field to branch on. Upstream
+does not yet emit that structured shape consistently (a raw
+``jsonschema.ValidationError`` string has been observed crossing the MCP
+boundary on invalid ``settings``); ``_error_payload`` classifies the
+unstructured case best-effort from known validator vocabulary rather than
+passing an opaque blob through. This is a client-side backstop, not a fix —
+the real fix is upstream always emitting ``error_class`` itself.
 """
 from __future__ import annotations
 
@@ -87,9 +97,48 @@ async def _with_upstream(fn):
         raise _unreachable_error(url, exc)
 
 
+def _field_hint(name: str, spec: Any, required: bool, *, depth: int) -> dict:
+    """One settings-field hint, recursing into nested object/array-of-object
+    schemas up to `depth` levels. Group-envelope fields (e.g. `company_details`
+    on `company_data__get_company_news`) are `type: object` at the top level
+    with their real required keys one level down — a non-recursive hint hides
+    exactly the thing an agent needs to shape a valid call for those, forcing
+    trial-and-error against a credit-metered endpoint."""
+    spec = spec or {}
+    hint = {
+        k: v
+        for k, v in {
+            "name": name,
+            "type": spec.get("type"),
+            "description": (spec.get("description") or "")[:200] or None,
+            "required": True if required else None,
+        }.items()
+        if v is not None
+    }
+    if depth <= 0:
+        return hint
+    if spec.get("type") == "object":
+        nested_props = spec.get("properties")
+        if isinstance(nested_props, dict) and nested_props:
+            nested_required = set(spec.get("required") or [])
+            hint["fields"] = [
+                _field_hint(n, s, n in nested_required, depth=depth - 1) for n, s in nested_props.items()
+            ]
+    elif spec.get("type") == "array" and isinstance(spec.get("items"), dict):
+        item_props = spec["items"].get("properties")
+        if isinstance(item_props, dict) and item_props:
+            item_required = set(spec["items"].get("required") or [])
+            hint["item_fields"] = [
+                _field_hint(n, s, n in item_required, depth=depth - 1) for n, s in item_props.items()
+            ]
+    return hint
+
+
 def _input_hints(schema: Any) -> Any:
     """Compact hint of a data tool's `settings` fields from its input schema —
-    enough for the agent to shape a call without the full JSON Schema."""
+    enough for the agent to shape a call without the full JSON Schema. Recurses
+    two levels into nested object/array-of-object properties so group-envelope
+    fields show their inner required keys too, not just their own type."""
     if not isinstance(schema, dict):
         return None
     settings = (schema.get("properties") or {}).get("settings") or {}
@@ -97,19 +146,7 @@ def _input_hints(schema: Any) -> Any:
     if not isinstance(props, dict) or not props:
         return settings.get("description") or None
     required = set(settings.get("required") or [])
-    return [
-        {
-            k: v
-            for k, v in {
-                "name": name,
-                "type": (spec or {}).get("type"),
-                "description": ((spec or {}).get("description") or "")[:200] or None,
-                "required": True if name in required else None,
-            }.items()
-            if v is not None
-        }
-        for name, spec in props.items()
-    ]
+    return [_field_hint(name, spec, name in required, depth=2) for name, spec in props.items()]
 
 
 def _parse_tool_result(result: Any) -> Any:
@@ -147,6 +184,41 @@ def _blocked_payload(parsed: Any) -> Optional[dict]:
         if status == "blocked" or c.get("blocked") is True:
             return c
     return None
+
+
+# Vocabulary from jsonschema's own ValidationError messages (the shape that
+# has been observed leaking raw across the MCP boundary, e.g. "[...] is not
+# of type 'object'"). Matching on this is a heuristic, not a real fix — the
+# real fix is upstream emitting `error_class` itself instead of letting a
+# validator exception's str() escape.
+_INVALID_INPUT_MARKERS = (
+    "is not of type",
+    "is a required property",
+    "additional properties are not allowed",
+    "is not one of",
+    "does not match",
+    "missing a field",
+)
+
+
+def _error_payload(parsed: Any) -> dict:
+    """Normalize a failed tool call into the `error_class` contract documented
+    for agents (INVALID_INPUT / VENDOR_ERROR / CREDITS_EXHAUSTED). A
+    structured upstream error passes through verbatim. Anything else —
+    including a raw validator exception string — is classified only when it
+    matches known validation vocabulary; a message we can't recognize stays
+    UNKNOWN rather than being guessed into VENDOR_ERROR, so an agent doesn't
+    blindly retry something that may actually be a bad setting."""
+    if isinstance(parsed, dict) and parsed.get("error_class"):
+        return {
+            "error_class": parsed.get("error_class"),
+            "message": parsed.get("message") or parsed.get("error") or parsed.get("reason"),
+            "details": parsed.get("details"),
+        }
+    text = parsed if isinstance(parsed, str) else json.dumps(parsed, ensure_ascii=False, default=str)
+    lowered = text.lower()
+    error_class = "INVALID_INPUT" if any(marker in lowered for marker in _INVALID_INPUT_MARKERS) else "UNKNOWN"
+    return {"error_class": error_class, "message": text[:1000], "details": None}
 
 
 @mcp.tool()
@@ -197,10 +269,17 @@ async def run_data_tool(tool_name: str, settings: dict, confirm: bool = False) -
     confirm=false (default) the platform returns a credit ESTIMATE instead of
     running — show the user the estimated credits, get their explicit
     go-ahead, then re-call with confirm=true. Never pass confirm=true on the
-    first call for a new request.
+    first call for a new request. A clean estimate is NOT a full validation
+    guarantee — the settings validator runs at execute time, so a confirm=true
+    call can still come back as status="error" with the same settings that
+    just estimated cleanly.
 
-    Returns the tool's records under `result` on success. Land them in an
-    nRev Table with save_to_table so a workflow can consume them later.
+    Returns the tool's records under `result` on success. On failure this
+    returns (never raises) `{"status": "error", "error_class", "message",
+    "details"}` — `error_class` is one of INVALID_INPUT / VENDOR_ERROR /
+    CREDITS_EXHAUSTED / UNKNOWN; see the one-off-research skill for what to do
+    with each. Land successful results in an nRev Table with save_to_table so
+    a workflow can consume them later.
     """
     async def _call(session):
         return await session.call_tool(tool_name, {"settings": settings or {}, "confirm": bool(confirm)})
@@ -209,8 +288,14 @@ async def run_data_tool(tool_name: str, settings: dict, confirm: bool = False) -
     parsed = _parse_tool_result(raw)
 
     if getattr(raw, "isError", False):
-        detail = parsed if isinstance(parsed, str) else json.dumps(parsed, ensure_ascii=False, default=str)
-        raise RuntimeError(f"data tool {tool_name!r} failed upstream: {detail[:1000]}")
+        err = _error_payload(parsed)
+        return {
+            "status": "error",
+            "tool_name": tool_name,
+            "error_class": err["error_class"],
+            "message": err["message"],
+            "details": err["details"],
+        }
 
     blocked = _blocked_payload(parsed)
     if blocked is not None:

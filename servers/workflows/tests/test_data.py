@@ -113,11 +113,41 @@ def test_run_data_tool_prefers_structured_content(upstream):
     assert out["result"] == {"records": []}
 
 
-def test_run_data_tool_raises_on_upstream_error_result(upstream):
+def test_run_data_tool_returns_structured_error_for_unrecognized_upstream_error(upstream):
     upstream.call_result = _text_result("node exploded", is_error=True)
-    with pytest.raises(RuntimeError) as exc:
-        asyncio.run(tools_data.run_data_tool("t", {}))
-    assert "node exploded" in str(exc.value)
+    out = asyncio.run(tools_data.run_data_tool("t", {}))
+    assert out["status"] == "error"
+    assert out["error_class"] == "UNKNOWN"
+    assert "node exploded" in out["message"]
+    assert out["details"] is None
+
+
+def test_run_data_tool_classifies_leaked_jsonschema_error_as_invalid_input(upstream):
+    # The exact leak seen in production: a raw jsonschema.ValidationError str()
+    # crossing the MCP boundary instead of a structured error_class.
+    upstream.call_result = _text_result(
+        "Input validation error: [{'field_name': 'domain', 'field_value': 'stripe.com'}] "
+        "is not of type 'object'",
+        is_error=True,
+    )
+    out = asyncio.run(tools_data.run_data_tool("company_data__get_company_news", {}))
+    assert out["status"] == "error"
+    assert out["error_class"] == "INVALID_INPUT"
+
+
+def test_run_data_tool_passes_through_structured_upstream_error(upstream):
+    upstream.call_result = _text_result(
+        {"error_class": "CREDITS_EXHAUSTED", "message": "tenant out of credits", "details": {"balance": 0}},
+        is_error=True,
+    )
+    out = asyncio.run(tools_data.run_data_tool("t", {}))
+    assert out == {
+        "status": "error",
+        "tool_name": "t",
+        "error_class": "CREDITS_EXHAUSTED",
+        "message": "tenant out of credits",
+        "details": {"balance": 0},
+    }
 
 
 def test_unreachable_upstream_is_actionable(upstream):
@@ -165,6 +195,48 @@ def test_list_data_tools_compacts_upstream_listing(upstream):
     assert fields["domain"]["required"] is True
     assert fields["signals"]["type"] == "array"
     assert "run_data_tool" in out["note"]
+
+
+def test_list_data_tools_recurses_into_group_envelope_fields(upstream):
+    # company_data__get_company_news-shaped tool: a `company_details` field
+    # that is itself an object wrapping the real required key (`domain`) — the
+    # flat hint used to report only {"name": "company_details", "type":
+    # "object"} and hide that nested requirement entirely.
+    upstream.list_result = SimpleNamespace(
+        tools=[
+            SimpleNamespace(
+                name="company_data__get_company_news",
+                description="Fetch recent news for a company.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "settings": {
+                            "type": "object",
+                            "properties": {
+                                "company_details": {
+                                    "type": "object",
+                                    "properties": {
+                                        "domain": {"type": "string", "description": "Company domain"},
+                                    },
+                                    "required": ["domain"],
+                                },
+                            },
+                            "required": ["company_details"],
+                        },
+                        "confirm": {"type": "boolean"},
+                    },
+                },
+            )
+        ]
+    )
+    out = asyncio.run(tools_data.list_data_tools())
+    fields = {f["name"]: f for f in out["data_tools"][0]["settings_fields"]}
+    group = fields["company_details"]
+    assert group["type"] == "object"
+    assert group["required"] is True
+    nested = {f["name"]: f for f in group["fields"]}
+    assert nested["domain"]["type"] == "string"
+    assert nested["domain"]["required"] is True
 
 
 # ── save_to_table ─────────────────────────────────────────────────────────────

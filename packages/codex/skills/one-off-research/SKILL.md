@@ -39,19 +39,36 @@ is far larger (`find_node`).
 
 ### 4. Build the settings
 `settings` mirrors the underlying node's schema as returned by
-`list_data_tools` — use exactly those field names; never invent them. Before
-writing settings for any provider-backed tool, consult **data-provider-quirks**
-(LinkedIn URN vs URL, domain formats, pagination pairs) and
-**provider-selection** if several tools could serve the job.
+`list_data_tools` — use exactly those field names; never invent them, and
+never assume a flat shape. Some fields are **group envelopes**: `type:
+"object"` at the top level, with the real required key(s) one level down.
+`list_data_tools` surfaces that nesting as a `fields` list on the field's hint
+(`item_fields` if it's a list-of-objects group) — build the value as the
+matching nested object, e.g. for `company_data__get_company_news`:
+`{"company_details": {"domain": "stripe.com"}}`, not `{"domain": "stripe.com"}`.
+This nested contract is the one-off tool's own simplified shape — it is
+**not** the same as the raw `{field_name, field_value}` envelope documented in
+**node-settings** for the same node used inside a workflow; don't copy that
+shape here, and don't assume every one-off tool is flat just because some are.
+Before writing settings for any provider-backed tool, consult
+**data-provider-quirks** (LinkedIn URN vs URL, domain formats, pagination
+pairs) and **provider-selection** if several tools could serve the job.
 
 ### 5. Estimate first — never confirm blind
 ```
 run_data_tool(tool_name="company_data__get_company_news",
-              settings={"domain": "stripe.com"})
+              settings={"company_details": {"domain": "stripe.com"}})
 ```
 With `confirm` unset (or false) the call does NOT execute: it returns a credit
 ESTIMATE and blocks. This first call is mandatory. **Never pass
 `confirm=true` on the first call**, no matter how cheap the tool looks.
+
+A clean estimate is not a full validation guarantee — the platform's settings
+validator runs at execute time, not estimate time. If a `confirm=true` call
+comes back INVALID_INPUT on settings that just estimated cleanly, that's a
+known platform gap, not something you did wrong — re-check the tool's hint
+(including nested `fields`/`item_fields`) against what you sent, fix, and
+re-estimate; don't assume the estimate was a validity check.
 
 ### 6. Get explicit approval
 Show the user: what will be fetched, from which provider, and the estimated
@@ -104,13 +121,18 @@ node, so the conversion is mechanical.
 
 ## Error handling
 
-`run_data_tool` failures carry an `error_class`:
+`run_data_tool` never raises for a failed tool call — a failure is a normal
+return with `status: "error"` and an `error_class`:
 
 | error_class | Meaning | Action |
 |---|---|---|
-| `INVALID_INPUT` | Settings are malformed for this node (wrong field, bad URL/URN/domain format) | Fix the settings against the schema + data-provider-quirks; re-estimate, re-confirm |
+| `INVALID_INPUT` | Settings are malformed for this node (wrong field, bad URL/URN/domain format, wrong shape for a group field) | Re-check the tool's hint from `list_data_tools` (including nested `fields`/`item_fields`) against what you sent; fix, re-estimate, re-confirm |
 | `VENDOR_ERROR` | Upstream provider failed or rate-limited | Not your settings' fault. Retry once after a pause; if it persists, tell the user and suggest trying later — don't hammer |
 | `CREDITS_EXHAUSTED` | Tenant is out of credits | STOP all data calls. Tell the user to top up in the platform; do not retry |
+| `UNKNOWN` | The failure didn't match a recognized shape | Don't assume it's your settings and don't loop retries — surface `message` (and `details`, when present) to the user verbatim and ask before trying again |
+
+`details` (when present) names the specific field/expectation that failed —
+show it alongside `message`, it's usually the fastest fix.
 
 A tool that succeeds but returns zero rows is not an error — verify the input
 (right domain? right URN?) against data-provider-quirks, then report the empty
