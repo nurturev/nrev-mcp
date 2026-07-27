@@ -202,15 +202,17 @@ plugin installable as one unit (skills + tools + OAuth "Connect" prompt) on
 clients like Cowork that can't spawn a local process at all. See
 `servers/workflows/oauth.py` / `server_http.py` for the hosted server itself.
 
-> **TODO — hardcoded staging URL.** The URL in all three `.mcp.json` /
+> **TODO — hardcoded prod URL.** The URL in all three `.mcp.json` /
 > `gemini-extension.json` files
-> (`https://nrev-workflows-mcp.public.staging.nurturev.com/mcp`) is
-> hand-hardcoded for now, deliberately — there's no prod hosted deployment
-> yet. Before shipping to real customers, this needs to become environment-
-> aware (e.g. templated at `sync-agents.sh`/`bump-version.sh` time, or moved
-> to a per-marketplace-listing config) rather than a literal staging
-> hostname baked into the committed manifests. Don't point real customers at
-> this as-is.
+> (`https://nrev-workflows-mcp.public.prod.nurturev.com/mcp`) is
+> hand-hardcoded for now, deliberately. Prod is live and end-to-end verified
+> (real OAuth flow, full tool list, federation to workflow_studio all
+> confirmed working against it) — this is now safe to point real customers
+> at. Still worth making environment-aware eventually (e.g. templated at
+> `sync-agents.sh`/`bump-version.sh` time, or moved to a per-marketplace-
+> listing config) rather than a literal hostname baked into the committed
+> manifests, so staging can be tested without hand-editing these files back
+> and forth.
 >
 > **TODO — local dev flow.** Each package's `mcp/` bundled server source
 > (and, for Codex, `bin/run-mcp.sh`) is now unreferenced by the manifests

@@ -6,7 +6,7 @@
   "mcpServers": {
     "nrev-workflows": {
       "type": "http",
-      "url": "https://nrev-workflows-mcp.public.staging.nurturev.com/mcp",
+      "url": "https://nrev-workflows-mcp.public.prod.nurturev.com/mcp",
       "oauth": true
     }
   }
