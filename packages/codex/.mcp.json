@@ -1,9 +1,9 @@
 {
   "mcpServers": {
     "nrev-workflows": {
-      "command": "./bin/run-mcp.sh",
-      "args": [],
-      "cwd": "."
+      "type": "http",
+      "url": "https://nrev-workflows-mcp.public.staging.nurturev.com/mcp",
+      "oauth": true
     }
   }
 }

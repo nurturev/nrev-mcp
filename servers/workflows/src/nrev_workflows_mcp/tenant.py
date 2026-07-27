@@ -15,23 +15,31 @@ This module:
     hard-stops creation paths via `assert_pinned_active`.
 
 We never switch the tenant — that stays a user action in the web app.
+
+Storage backend (pin + cache) is selected the same way `auth.py` selects its
+backend — via `request_state.hosted_identity()`. On stdio this is the
+module-level globals below, exactly as before. On the hosted transport it's
+Redis, scoped by session id (`session_store.py`): a plain contextvar would
+reset between a customer's separate tool calls (separate HTTP requests) and
+wouldn't be visible across replicas, so the pin has to live somewhere that
+survives both.
 """
 from __future__ import annotations
 
 import time
 from typing import Optional
 
-from . import um_api
+from . import request_state, um_api
 from .transport import TenantChangedError
 
 # Active-tenant reads are cached this long so back-to-back guards/reads don't
-# each round-trip to UM; drift checks pass force=True to bypass it.
+# each round-trip to UM; drift checks pass force=True to bypass it. Also used
+# as the TTL for the hosted (Redis) cache — see session_store.TENANT_CACHE_TTL.
 _CACHE_TTL_SECONDS = 10.0
 
+# stdio-transport state only — untouched by the hosted transport.
 _cache: Optional[dict] = None
 _cache_at: float = 0.0
-
-# The tenant this session's work is anchored to (set by get_active_tenant).
 _pinned: Optional[dict] = None
 
 
@@ -54,41 +62,95 @@ def _slim(t: Optional[dict]) -> Optional[dict]:
     }
 
 
+# ── backend seam ──────────────────────────────────────────────────────────
+
+
+def _pinned_get() -> Optional[dict]:
+    session_id = request_state.hosted_identity()
+    if session_id is not None:
+        from . import session_store
+
+        return session_store.load_tenant_pin(session_id)
+    return _pinned
+
+
+def _pinned_set(tenant: Optional[dict]) -> None:
+    global _pinned
+    session_id = request_state.hosted_identity()
+    if session_id is not None:
+        from . import session_store
+
+        session_store.save_tenant_pin(session_id, tenant)
+        return
+    _pinned = tenant
+
+
+def _cache_get() -> Optional[dict]:
+    session_id = request_state.hosted_identity()
+    if session_id is not None:
+        from . import session_store
+
+        return session_store.load_tenant_cache(session_id)
+    if _cache is not None and (time.time() - _cache_at) < _CACHE_TTL_SECONDS:
+        return _cache
+    return None
+
+
+def _cache_set(data: dict) -> None:
+    global _cache, _cache_at
+    session_id = request_state.hosted_identity()
+    if session_id is not None:
+        from . import session_store
+
+        session_store.save_tenant_cache(session_id, data)
+        return
+    _cache, _cache_at = data, time.time()
+
+
+# ── public API (transport-agnostic) ──────────────────────────────────────
+
+
 def active_tenant(force: bool = False) -> dict:
     """The currently-active tenant plus all the tenants the user can switch among.
 
     Returns ``{"active": {...}|None, "available": [{..., "is_active": bool}]}``.
     Lightly cached (TTL); ``force`` bypasses the cache for a fresh read.
     """
-    global _cache, _cache_at
-    now = time.time()
-    if not force and _cache is not None and (now - _cache_at) < _CACHE_TTL_SECONDS:
-        return _cache
+    if not force:
+        cached = _cache_get()
+        if cached is not None:
+            return cached
     tenants = _unwrap_tenants(um_api.get_user_tenants())
     active = next((t for t in tenants if t.get("is_enabled")), None)
     out = {
         "active": _slim(active),
         "available": [{**_slim(t), "is_active": bool(t.get("is_enabled"))} for t in tenants],
     }
-    _cache, _cache_at = out, now
+    _cache_set(out)
     return out
 
 
 def pinned() -> Optional[dict]:
     """The tenant work is currently anchored to (or None if nothing pinned)."""
-    return _pinned
+    return _pinned_get()
 
 
 def pin(tenant: Optional[dict]) -> Optional[dict]:
     """Anchor subsequent work to ``tenant`` (a slim ``{tenant_id, ...}`` dict)."""
-    global _pinned
-    _pinned = _slim(tenant)
-    return _pinned
+    slim = _slim(tenant)
+    _pinned_set(slim)
+    return slim
 
 
 def reset() -> None:
     """Drop the pin and cache (test isolation / logout)."""
     global _pinned, _cache, _cache_at
+    session_id = request_state.hosted_identity()
+    if session_id is not None:
+        from . import session_store
+
+        session_store.clear_tenant_state(session_id)
+        return
     _pinned = None
     _cache, _cache_at = None, 0.0
 
@@ -100,13 +162,14 @@ def check_drift(force: bool = True) -> Optional[dict]:
     otherwise ``{"from": <pinned>, "to": <live>}``. ``force`` re-reads UM by
     default so a guard sees the truth rather than a stale cache.
     """
-    if _pinned is None:
+    pin_state = _pinned_get()
+    if pin_state is None:
         return None
     live = active_tenant(force=force).get("active")
     live_id = live.get("tenant_id") if live else None
-    if live_id == _pinned.get("tenant_id"):
+    if live_id == pin_state.get("tenant_id"):
         return None
-    return {"from": _pinned, "to": live}
+    return {"from": pin_state, "to": live}
 
 
 def assert_pinned_active(operation: str = "this operation") -> None:

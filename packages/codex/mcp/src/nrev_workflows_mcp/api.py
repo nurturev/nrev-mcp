@@ -23,8 +23,14 @@ from . import config
 from .transport import request as _request
 
 
-def request(method: str, path: str, json_body: Optional[dict] = None, params: Optional[dict] = None) -> Any:
-    return _request(config.workflow_host(), method, path, json_body=json_body, params=params)
+def request(
+    method: str,
+    path: str,
+    json_body: Optional[dict] = None,
+    params: Optional[dict] = None,
+    files: Optional[dict] = None,
+) -> Any:
+    return _request(config.workflow_host(), method, path, json_body=json_body, params=params, files=files)
 
 
 # ── Workflows ────────────────────────────────────────────────────────────────
@@ -71,8 +77,30 @@ def patch_workflow_no_validation(
 
 
 def duplicate_workflow(wf_id: str, new_name: Optional[str] = None) -> dict:
+    # `name` is REQUIRED by the backend's DuplicateWorkflowRequest — callers
+    # without one should derive it from the source workflow's name first.
     body = {"name": new_name} if new_name else {}
     return request("POST", f"/workflows/{wf_id}/duplicate", json_body=body)
+
+
+def download_workflow_json(wf_id: str) -> Any:
+    """GET /workflows/{id}/download-json — the full workflow export the web
+    app's Download button streams: the workflow envelope plus its `variables`
+    and the `nrev_tables` schema expressions it references. Path verified
+    against the FE WorkflowApiService.downloadWorkflowJson (GET, JSON body)."""
+    return request("GET", f"/workflows/{wf_id}/download-json")
+
+
+def upload_workflow_json(filename: str, content: bytes) -> dict:
+    """POST /workflows/upload-json — import a previously exported workflow.
+    Multipart upload, field name `upload_file`, content type must be
+    application/json (the backend rejects anything else). Verified against the
+    FE WorkflowApiService.uploadWorkflowJson + the backend route."""
+    return request(
+        "POST",
+        "/workflows/upload-json",
+        files={"upload_file": (filename, content, "application/json")},
+    )
 
 
 # ── Node definitions catalog ─────────────────────────────────────────────────
@@ -127,6 +155,56 @@ def list_connection_apps(
     if search:
         params["search"] = search
     return request("GET", "/connections/apps", params=params)
+
+
+def generate_connection_url(
+    connection_app_id: str, success_redirect_uri: str, error_redirect_uri: str
+) -> dict:
+    """POST /connections/{app}/url — mint the hosted OAuth/connect URL for an
+    app. Both redirect URIs are REQUIRED by the backend's ConnectionUrlRequest
+    (camelCase aliases). Response: {connectUrl, expiresIn, appId}. Verified
+    against the backend connection_endpoints.generate_connection_url."""
+    return request(
+        "POST",
+        f"/connections/{connection_app_id}/url",
+        json_body={
+            "successRedirectUri": success_redirect_uri,
+            "errorRedirectUri": error_redirect_uri,
+        },
+    )
+
+
+# ── Listeners (webhook/trigger test lifecycle) ───────────────────────────────
+# Paths + param names verified against the FE ListenersApiService.
+
+
+def activate_listener_test(wf_id: str, node_id: str, execution_mode: str = "semi_workflow") -> Any:
+    """POST /listeners/workflow/{wf}/node/{n}/activate-test?execution_mode=…
+    Arms a listener node to capture its next incoming event for testing.
+    execution_mode: semi_workflow (capture only) | full_workflow (run the
+    workflow off the captured event)."""
+    return request(
+        "POST",
+        f"/listeners/workflow/{wf_id}/node/{node_id}/activate-test",
+        params={"execution_mode": execution_mode},
+    )
+
+
+def get_listener_latest_event(wf_id: str, node_id: str, historical: bool = False) -> dict:
+    """GET /listeners/workflow/{wf}/node/{n}/latest-event?historical=…
+    Polls for the armed listener's event. historical=true returns the latest
+    event up to now; false only events after the listener last listened.
+    Response: {status: running|completed|failed|timeout, data: [...], error}."""
+    return request(
+        "GET",
+        f"/listeners/workflow/{wf_id}/node/{node_id}/latest-event",
+        params={"historical": "true" if historical else "false"},
+    )
+
+
+def deactivate_listener(wf_id: str, node_id: str) -> Any:
+    """POST /listeners/workflow/{wf}/node/{n}/deactivate — disarm the listener."""
+    return request("POST", f"/listeners/workflow/{wf_id}/node/{node_id}/deactivate", json_body={})
 
 
 # ── Node field schema / options ──────────────────────────────────────────────
@@ -231,6 +309,27 @@ def list_executions(wf_id: str, limit: int = 10) -> dict:
     return request("GET", f"/execution-logs/workflow/{wf_id}", params={"limit": limit})
 
 
+def list_global_executions(limit: int = 20, skip: int = 0, search: Optional[str] = None) -> dict:
+    """GET /execution-logs — run history across ALL workflows in the tenant
+    (the web app's Run Logs page). Returns {data: [...], meta} where each item
+    carries id/status/startedAt/creditsUsed/workflowName/workflowId. Params
+    verified against the FE WorkflowApiService.getGlobalRunLogs."""
+    params: dict = {"skip": max(0, int(skip)), "limit": int(limit)}
+    if search:
+        params["search"] = search
+    return request("GET", "/execution-logs", params=params)
+
+
+def execution_stats(date_range: Optional[str] = None) -> dict:
+    """GET /execution-logs/stats — tenant-wide execution stats: credits
+    consumed + total executions, each with a total, percent change, and a time
+    series. `date_range`: last_day | last_week | last_month (default) |
+    last_3_months (backend enum; passed as `dateRange`). Verified against the
+    FE RunLogsApiService.useGetRunLogsStats + the backend route."""
+    params = {"dateRange": date_range} if date_range else None
+    return request("GET", "/execution-logs/stats", params=params)
+
+
 def get_execution_detail(wf_id: str, exec_id: str, only_latest: bool = True) -> dict:
     """GET the run log for one execution. The response carries the per-node-RUN
     list under `blockRuns` (one entry per block execution). `only_latest=false`
@@ -243,10 +342,32 @@ def get_execution_detail(wf_id: str, exec_id: str, only_latest: bool = True) -> 
     )
 
 
-def abort_execution(wf_id: str, exec_id: str) -> Any:
-    """UNVERIFIED path (predecessor flagged it may 404 — capture from the UI's
-    stop button if so)."""
-    return request("POST", f"/executions/workflow/{wf_id}/workflow-execution/{exec_id}/abort")
+def stop_execution(wf_id: str, exec_id: str) -> Any:
+    """POST .../workflow-execution/{id}/stop — what the UI's stop button calls
+    (verified against the FE WorkflowApiService.stopWorkflowExecution; replaces
+    the predecessor's UNVERIFIED `/abort` path, which 404s). Returns 204/empty
+    on success."""
+    return request("POST", f"/executions/workflow/{wf_id}/workflow-execution/{exec_id}/stop")
+
+
+def stop_node_execution(wf_id: str, exec_id: str, node_execution_id: str) -> Any:
+    """POST .../node-execution/{id}/stop — stop ONE node run inside an
+    execution (the per-node stop button). Verified against the FE
+    WorkflowApiService.stopNodeExecution. Returns 204/empty on success."""
+    return request(
+        "POST",
+        f"/executions/workflow/{wf_id}/workflow-execution/{exec_id}/node-execution/{node_execution_id}/stop",
+    )
+
+
+def resume_execution(wf_id: str, exec_id: str, envelope: Optional[dict] = None) -> dict:
+    """POST /workflows/{wf}/execution/{exec}/update-and-resume — resume a
+    paused/stopped execution, optionally saving an updated workflow envelope
+    first (the backend takes `workflow_details` as an OPTIONAL embedded body —
+    omit it to resume as-is). Returns {workflow, execution}. Verified against
+    the FE WorkflowApiService.resumeWorkflowExecution + the backend route."""
+    body = {"workflow_details": envelope} if envelope else {}
+    return request("POST", f"/workflows/{wf_id}/execution/{exec_id}/update-and-resume", json_body=body)
 
 
 def get_node_preview(

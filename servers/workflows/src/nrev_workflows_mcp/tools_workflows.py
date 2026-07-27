@@ -1,10 +1,14 @@
 """Workflow CRUD and mutation tools."""
 from __future__ import annotations
 
+import json
+import os
 from typing import Any, Optional
 
 from . import api, projections, shapes, tenant
 from .app import mcp
+
+_EXPORT_ROOT = os.environ.get("NREV_DOWNLOAD_DIR", os.path.expanduser("~/.nrev-mcp/downloads"))
 
 _def_cache: dict[str, dict] = {}
 
@@ -259,3 +263,66 @@ def manage_variables(
         api.delete_variable(workflow_id, variable_id)
         return {"deleted": variable_id}
     raise ValueError(f"unknown action {action!r} — use list | create | update | delete")
+
+
+@mcp.tool()
+def duplicate_workflow(workflow_id: str, new_name: Optional[str] = None) -> dict:
+    """Clone an existing workflow (draft version) — the fast way to iterate on
+    a variant without touching the original, or to reuse a proven build for a
+    new segment. Without `new_name` the copy is named "<original> (copy)".
+    Returns the slim view of the new workflow including its workflow_id."""
+    if not new_name:
+        # The platform requires a name on duplicate; derive one from the source.
+        source = api.get_workflow(workflow_id)
+        new_name = f"{source.get('name') or 'Workflow'} (copy)"
+    return projections.slim_workflow(api.duplicate_workflow(workflow_id, new_name))
+
+
+@mcp.tool()
+def export_workflow(workflow_id: str, target_path: Optional[str] = None, overwrite: bool = False) -> dict:
+    """Export a workflow's full JSON (the envelope plus its variables and the
+    schema of every nRev table it references) to a local file — for backup,
+    migration between tenants/environments (re-import with import_workflow),
+    or offline inspection. The payload is large, so it is written to disk
+    rather than returned inline. Default path:
+    ~/.nrev-mcp/downloads/workflows/<workflow_id>.json."""
+    raw = api.download_workflow_json(workflow_id)
+    path = (
+        os.path.abspath(os.path.expanduser(target_path))
+        if target_path
+        else os.path.join(_EXPORT_ROOT, "workflows", f"{workflow_id}.json")
+    )
+    if os.path.exists(path) and not overwrite:
+        raise ValueError(f"refusing to overwrite {path!r} — pass overwrite=true or another target_path")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    text = raw if isinstance(raw, str) else json.dumps(raw, ensure_ascii=False, default=str)
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    summary: dict = {"path": path, "bytes": len(text.encode("utf-8"))}
+    if isinstance(raw, dict):
+        summary["workflow_name"] = raw.get("name")
+        summary["node_count"] = len(raw.get("blocks") or [])
+        summary["variable_count"] = len(raw.get("variables") or [])
+    return summary
+
+
+@mcp.tool()
+def import_workflow(file_path: str) -> dict:
+    """Create a NEW workflow from an export_workflow JSON file (the platform's
+    upload-json import) — restores the graph, settings, and variables into the
+    ACTIVE tenant. Connections and table references may need re-pointing after
+    import (run validate_workflow and fix what it flags). Returns the slim view
+    of the created workflow."""
+    # New resource — no existing id for the backend to access-gate, so a
+    # mid-flight tenant switch would silently create this in the wrong tenant.
+    tenant.assert_pinned_active("importing a workflow")
+    path = os.path.abspath(os.path.expanduser(file_path))
+    if not os.path.isfile(path):
+        raise ValueError(f"no file at {path!r}")
+    with open(path, "rb") as fh:
+        content = fh.read()
+    try:
+        json.loads(content)
+    except Exception as exc:
+        raise ValueError(f"{path!r} is not valid JSON (the backend only accepts application/json): {exc}")
+    return projections.slim_workflow(api.upload_workflow_json(os.path.basename(path), content))

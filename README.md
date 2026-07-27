@@ -14,11 +14,15 @@ nrev-mcp/
 ├── servers/
 │   └── workflows/                    # MCP server: workflow platform + tables service
 │       ├── src/nrev_workflows_mcp/
-│       │   ├── server.py             # entrypoint (stdio)
+│       │   ├── server.py             # stdio entrypoint (local / Claude Code CLI)
+│       │   ├── server_http.py        # hosted entrypoint (streamable-http + OAuth, e.g. Cowork)
 │       │   ├── app.py                # FastMCP instance + server instructions
-│       │   ├── auth.py               # persistent auto-refreshing session + manual override
+│       │   ├── auth.py               # persistent auto-refreshing session (local file or hosted session store)
+│       │   ├── oauth.py              # OAuth 2.1 authorization server for the hosted transport
+│       │   ├── session_store.py      # Redis-backed session/token store (hosted transport only)
+│       │   ├── request_state.py      # per-request identity seam (hosted transport only)
 │       │   ├── config.py             # env (prod/staging) + host + credential-path resolution
-│       │   ├── login.py              # browser sign-in relayed via the web app
+│       │   ├── login.py              # browser sign-in relayed via the web app (stdio transport)
 │       │   ├── cli.py                # `nrev-workflows auth login|logout|status`
 │       │   ├── transport.py          # shared HTTP core (refresh + retry on 401)
 │       │   ├── api.py                # workflow platform REST wrappers
@@ -27,7 +31,8 @@ nrev-mcp/
 │       │   ├── projections.py        # compact views of large API payloads
 │       │   ├── um_api.py             # user-management REST wrappers (tenancy + knowledge base)
 │       │   ├── tenant.py             # active-tenant pin + mid-session drift detection
-│       │   └── tools_*.py            # 44 MCP tools in 7 modules
+│       │   └── tools_*.py            # 57 MCP tools in 9 modules
+│       ├── Dockerfile                # image for the hosted (streamable-http) transport
 │       └── tests/                    # pure-logic unit tests (no network)
 ├── shared/                           # ⭐ single source of truth (edit here)
 │   ├── skills/                       # 10 SKILL.md domain skills (open format)
@@ -62,15 +67,20 @@ Works on macOS, Linux, and native Windows: the plugin starts the server by
 invoking `uv` directly (`.mcp.json` → `uv run …`), not through a shell script,
 and `uv` ships as a native binary (no `.cmd` shim), so no `cmd /c` wrapper is
 needed. Restart Claude Code after install; `/mcp` should show `nrev-workflows`
-(44 tools).
+(57 tools).
 
 First use — sign in once: tell Claude *"log in to nrev workflows"* (the
 `auth_login` tool — cross-platform) or, on macOS/Linux with the repo cloned,
 run `scripts/login.sh`. A browser opens
 for Google sign-in; the session is saved to `~/.nrev-workflows/credentials`
 (chmod 600) and **refreshed automatically**, so you never paste a JWT.
-Production by default (`NREV_ENV=staging` to switch). For CI, a pre-issued token
-can be supplied via `set_jwt` / `NREV_JWT` — a manual override, not refreshed.
+Production by default (`NREV_ENV=staging` to switch).
+
+A hosted, OAuth-authenticated variant (`nrev-workflows-mcp-http`, see
+`servers/workflows/server_http.py`) also exists for remote-MCP-only clients
+like Cowork, which can't spawn a local process — sign-in there is a normal
+"Connect" prompt in the client, reusing this same web app login under the
+hood. Staging-only for now; not yet a customer-facing install path.
 
 ### Dev install (this repo cloned locally)
 
@@ -154,24 +164,26 @@ entry point.
 | Env var | Default | Purpose |
 |---|---|---|
 | `NREV_ENV` | `prod` | Environment (`prod`/`staging`); derives the web-app, UM, workflow & tables hosts. The server otherwise follows the logged-in session's env. |
-| `NREV_JWT` | – | Manual override token at startup (else `auth_login` / `set_jwt`); not refreshed |
 | `NREV_WEBAPP_URL` | per `NREV_ENV` | Web app base — where sign-in is relayed from (overrides `NREV_ENV`) |
 | `NREV_UM_URL` | per `NREV_ENV` | user-management base — session refresh (overrides `NREV_ENV`) |
 | `NREV_WF_HOST` | per `NREV_ENV` | Workflow platform API (overrides `NREV_ENV`) |
+| `NREV_WF_MCP_URL` | `<workflow host>/mcp` | workflow_studio's data MCP server (one-off data tools federation) |
 | `NREV_TABLES_HOST` | per `NREV_ENV` | Tables service (overrides `NREV_ENV`) |
 | `NREV_WORKFLOWS_DIR` | `~/.nrev-workflows` | Where the session credentials are stored |
 | `NREV_TIMEOUT` | `60` | HTTP timeout (seconds) |
 | `NREV_DOWNLOAD_DIR` | `~/.nrev-mcp/downloads` | download_node_output target |
 
-## Tool surface (44)
+## Tool surface (57)
 
 | Group | Tools |
 |---|---|
-| Auth | `auth_login` (browser sign-in, auto-refresh), `set_jwt` (manual override), `get_auth_status` |
+| Auth | `auth_login` (browser sign-in, auto-refresh), `get_auth_status` |
 | Tenant | `get_active_tenant` (which tenant work is anchored to + the ones the user can switch among; read-only — never switches) |
-| Discovery | `search_nodes`, `find_node` (intent-ranked search), `get_node_type`, `describe_node` (schema + live options in one call), `get_field_options`, `list_connections`, `search_plays` |
-| Workflows | `list_workflows`, `get_workflow`, `create_workflow`, `edit_workflow` (batched graph ops), `update_node_settings`, `manage_variables`, `set_workflow_live`, `get_workflow_live_status` |
-| Execution | `validate_workflow`, `estimate_run_cost`, `run_workflow` (spend-gated), `run_node`, `get_execution` (with wait), `stop_execution`, `get_node_output`, `download_node_output`, `check_node_errors` |
+| Discovery | `search_nodes`, `find_node` (intent-ranked search), `get_node_type`, `describe_node` (schema + live options in one call), `get_field_options`, `list_connections`, `connect_app` (mint the hosted OAuth URL for a new app account), `search_plays` |
+| Workflows | `list_workflows`, `get_workflow`, `create_workflow`, `duplicate_workflow`, `edit_workflow` (batched graph ops), `update_node_settings`, `manage_variables`, `set_workflow_live`, `get_workflow_live_status`, `export_workflow` (full JSON to a local file), `import_workflow` (from an export file) |
+| Execution | `validate_workflow`, `estimate_run_cost`, `run_workflow` (spend-gated), `run_node`, `get_execution` (with wait), `stop_execution`, `stop_node_execution`, `resume_execution`, `list_recent_executions` (global run history), `get_execution_stats`, `get_node_output`, `download_node_output`, `check_node_errors` |
+| Listeners | `activate_listener_test` (arm a webhook/trigger node), `get_listener_event` (poll for the captured payload), `deactivate_listener` |
+| One-off data | `list_data_tools` (federated live from the workflow_studio MCP server), `run_data_tool` (server-enforced spend gate: confirm=false returns a credit estimate), `save_to_table` (land results in an nRev Table, creating it if needed) |
 | Tables | `list_tables`, `get_table`, `create_table`, `update_table`, `delete_table`, `get_table_rows`, `add_table_rows`, `update_table_rows`, `delete_table_rows`, `aggregate_table`, `get_distinct_values`, `join_tables` |
 | Knowledge base | `search_knowledge` (ranked retrieval), `get_knowledge_base` (full read + gaps), `save_knowledge` (reconciling merge upsert), `forget_knowledge` (guarded delete) |
 
@@ -183,6 +195,12 @@ Design notes:
 - `run_workflow` refuses a real-credit run (any node not in test mode) without
   `confirm=true`, returning an `estimate_run_cost` breakdown so spend is
   surfaced before it happens.
+- **One-off data is federated, not hand-written.** The workflow_studio MCP
+  server exposes each tool-eligible node as a tool with a server-enforced
+  spend gate; nrev-mcp connects to it per call (Streamable HTTP, same platform
+  JWT) and re-exposes the set — so new data tools appear without an nrev-mcp
+  release, and the confirm/estimate round-trip is enforced in one place,
+  server-side.
 - **Tenant safety.** A user can belong to several tenants; the active one is
   server-side state (not in the token), so switching it in the web app makes the
   same session resolve to a different tenant mid-task. `get_active_tenant` pins
@@ -212,9 +230,15 @@ the platform web app's network tab and fix the wrapper in `api.py`:
 - `POST /executions/workflow/{id}/execute` body key for manual input data
 - `GET /plays/multi` query params; `POST /plays/{id}/summon` body
 - `/workflow/{id}/variables` create/update body shape
-- `POST .../abort` (predecessor flagged it may 404)
 - Orphan-target `inputs` skeleton on edge wiring (shapes.py `_op_add_edge`)
 - `DELETE /tables/{id}` (was 405 "not yet live" at predecessor's last test)
+- The workflow_studio data MCP server itself (`<workflow host>/mcp`) — the
+  federation client (`list_data_tools` / `run_data_tool`) is built to the
+  agreed contract but the upstream server may not be deployed in every
+  environment yet; the tools report this actionably when unreachable
+
+(1.0.0 cleared the former `POST .../abort` entry: the platform's stop path is
+`POST .../workflow-execution/{id}/stop`, verified against the web app.)
 
 ## Testing
 
@@ -222,9 +246,10 @@ the platform web app's network tab and fix the wrapper in `api.py`:
 cd servers/workflows && uv run pytest
 ```
 
-94 unit tests cover the mutation engine, projections, and auth (session
-persistence + refresh, network mocked) — no live calls. Live-API smoke testing
-is manual for now (POC).
+127 unit tests cover the mutation engine, projections, auth (session
+persistence + refresh, network mocked), the workflow-builder-parity client
+methods, and the one-off data tools (upstream MCP session faked) — no live
+calls. Live-API smoke testing is manual for now (POC).
 
 ## Roadmap
 

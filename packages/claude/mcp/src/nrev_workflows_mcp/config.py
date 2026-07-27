@@ -86,8 +86,49 @@ def workflow_host() -> str:
     return _host("workflow", "NREV_WF_HOST")
 
 
+def wf_mcp_url() -> str:
+    """workflow_studio's embedded MCP server (Streamable HTTP) — the one-off
+    data tools federated by tools_data.py. Lives at /mcp on the workflow host.
+    ``NREV_WF_MCP_URL`` overrides the full URL (wins over host resolution).
+
+    Returned WITH a trailing slash on purpose. The server mounts the MCP app at
+    ``/mcp``, so a slash-less request 307-redirects to ``/mcp/``; behind a
+    TLS-terminating proxy that redirect downgrades the scheme to ``http://``,
+    which the MCP client then cannot connect to. Addressing ``/mcp/`` directly
+    never triggers the redirect."""
+    base = (os.environ.get("NREV_WF_MCP_URL") or f"{workflow_host()}/mcp").rstrip("/")
+    return base + "/"
+
+
 def tables_host() -> str:
     return _host("tables", "NREV_TABLES_HOST")
+
+
+def redis_host() -> str:
+    return os.environ.get("NREV_REDIS_HOST", "localhost")
+
+
+def redis_port() -> int:
+    return int(os.environ.get("NREV_REDIS_PORT", "6379"))
+
+
+def redis_password() -> "str | None":
+    return os.environ.get("NREV_REDIS_PASSWORD") or None
+
+
+def redis_ssl() -> bool:
+    return os.environ.get("NREV_REDIS_SSL", "").strip().lower() in ("1", "true", "yes")
+
+
+def hosted_issuer_url() -> str:
+    """Public HTTPS base URL of this deployment — used as the OAuth issuer
+    and resource-server identity. Only read on the hosted transport."""
+    url = os.environ.get("NREV_HOSTED_ISSUER_URL", "").strip()
+    if not url:
+        raise RuntimeError(
+            "NREV_HOSTED_ISSUER_URL is required for the hosted (streamable-http) transport."
+        )
+    return url.rstrip("/")
 
 
 def config_dir() -> Path:

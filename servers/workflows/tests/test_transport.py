@@ -61,3 +61,24 @@ def test_request_entrypoint_carries_header(monkeypatch):
     transport.request("http://host", "GET", "/x")
 
     assert _FakeClient.last_headers["X-Nrev-Client"] == "nrev-mcp"
+
+
+class _FakeClientMultipart(_FakeClient):
+    def request(self, method, path, json=None, params=None, files=None):
+        return _FakeResponse()
+
+
+def test_send_multipart_drops_json_content_type(monkeypatch):
+    # A files= upload must NOT carry the client-level application/json header —
+    # httpx applies content-derived headers via setdefault, so a preset
+    # Content-Type would clobber the multipart boundary and break the upload.
+    monkeypatch.setattr(transport.httpx, "Client", _FakeClientMultipart)
+
+    transport._send(
+        "http://host", "tok", "POST", "/x", None, None,
+        files={"upload_file": ("a.json", b"{}", "application/json")},
+    )
+
+    assert "Content-Type" not in _FakeClientMultipart.last_headers
+    assert _FakeClientMultipart.last_headers["Authorization"] == "Bearer tok"
+    assert _FakeClientMultipart.last_headers["X-Nrev-Client"] == "nrev-mcp"
