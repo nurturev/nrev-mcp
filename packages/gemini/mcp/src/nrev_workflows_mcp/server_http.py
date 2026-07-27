@@ -20,13 +20,19 @@ from . import config  # noqa: E402
 from .app import mcp  # noqa: E402
 
 # Tool modules register themselves against `mcp` on import — same set as the
-# stdio entrypoint (server.py).
+# stdio entrypoint (server.py). Keep this list in sync with server.py's —
+# nothing enforces that automatically (a hosted-only file like this one isn't
+# touched by changes made solely on the stdio side, so a merge can silently
+# leave it stale; confirmed by a live tools/list count after this was first
+# written without tools_data/tools_listeners).
 from . import tools_auth  # noqa: F401,E402
 from . import tools_tenant  # noqa: F401,E402
 from . import tools_discovery  # noqa: F401,E402
 from . import tools_workflows  # noqa: F401,E402
 from . import tools_execution  # noqa: F401,E402
+from . import tools_listeners  # noqa: F401,E402
 from . import tools_tables  # noqa: F401,E402
+from . import tools_data  # noqa: F401,E402
 from . import tools_knowledge  # noqa: F401,E402
 
 
