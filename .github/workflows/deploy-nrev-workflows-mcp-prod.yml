@@ -1,0 +1,55 @@
+# Deploys the hosted nrev-workflows-mcp server (servers/workflows/) to the
+# prod Kubernetes cluster. Mirrors deploy-nrev-workflows-mcp-staging.yml,
+# adapted for prod: this repo has no separate `prod` git branch (unlike
+# sibling one-service-per-repo services), so the trigger is push-to-`main`
+# with the same path filter — `main` already carries prod's config as of
+# the plugin-overhaul merge, and every prod Helm value (region us-east-1,
+# prod Redis, prod ingress host) lives in values-prod.yaml, not in code.
+#
+# This only rebuilds+redeploys the already-existing Kubernetes Deployment
+# (`kubectl rollout restart`) — the initial `helm install` is a one-time
+# manual bootstrap, done once from the separate helm-charts repo.
+name: Deploy nrev-workflows-mcp Prod
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'servers/workflows/**'
+      - '.github/workflows/deploy-nrev-workflows-mcp-prod.yml'
+
+permissions:
+  id-token: write # required for requesting the AWS OIDC JWT
+  contents: read  # required for actions/checkout
+
+jobs:
+  deploy-prod:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1.7.0
+        with:
+          role-to-assume: arn:aws:iam::979176640062:role/github-action-role
+          aws-region: us-east-1
+          mask-aws-account-id: 'false'
+
+      - name: Login to ECR
+        run: |
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 979176640062.dkr.ecr.us-east-1.amazonaws.com
+
+      - name: Build and push Docker image
+        working-directory: servers/workflows
+        run: |
+          docker build --no-cache --platform linux/amd64 -t nrev-workflows-mcp-kub .
+          docker tag nrev-workflows-mcp-kub:latest 979176640062.dkr.ecr.us-east-1.amazonaws.com/nrev-workflows-mcp-kub:latest
+          docker push 979176640062.dkr.ecr.us-east-1.amazonaws.com/nrev-workflows-mcp-kub:latest
+
+      - name: Deploy to Kubernetes
+        run: |
+          echo "${{ secrets.KUBECONFIG_PROD }}" > kubeconfig_prod
+          export KUBECONFIG=kubeconfig_prod
+          kubectl rollout restart deploy nrev-workflows-mcp -n prod
