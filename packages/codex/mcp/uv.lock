@@ -350,7 +350,7 @@ wheels = [
 
 [[package]]
 name = "nrev-workflows-mcp"
-version = "0.9.1"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
@@ -366,7 +366,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.27" },
-    { name = "mcp", specifier = ">=1.2.0" },
+    { name = "mcp", specifier = ">=1.8.0" },
     { name = "redis", specifier = ">=5.0" },
 ]
 

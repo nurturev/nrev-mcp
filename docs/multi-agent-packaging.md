@@ -195,20 +195,45 @@ scripts/sync-agents.sh --link-dev   # dev loop: symlink shared/skills into the
 
 ## Per-agent packages
 
+**All three packages' `mcpServers` entries now point at the hosted
+streamable-http connector** (`type: "http"`, `url: ".../mcp"`, `oauth: true`)
+instead of launching a local `uv run` process — this is what makes the
+plugin installable as one unit (skills + tools + OAuth "Connect" prompt) on
+clients like Cowork that can't spawn a local process at all. See
+`servers/workflows/oauth.py` / `server_http.py` for the hosted server itself.
+
+> **TODO — hardcoded staging URL.** The URL in all three `.mcp.json` /
+> `gemini-extension.json` files
+> (`https://nrev-workflows-mcp.public.staging.nurturev.com/mcp`) is
+> hand-hardcoded for now, deliberately — there's no prod hosted deployment
+> yet. Before shipping to real customers, this needs to become environment-
+> aware (e.g. templated at `sync-agents.sh`/`bump-version.sh` time, or moved
+> to a per-marketplace-listing config) rather than a literal staging
+> hostname baked into the committed manifests. Don't point real customers at
+> this as-is.
+>
+> **TODO — local dev flow.** Each package's `mcp/` bundled server source
+> (and, for Codex, `bin/run-mcp.sh`) is now unreferenced by the manifests
+> above — nothing launches it locally anymore. Left in place deliberately
+> for now rather than deleted; `scripts/sync-agents.sh` still regenerates it
+> every run. Revisit once there's a decided story for local/offline dev
+> against these packages (see the two options discussed when this change
+> was made: point everything at the hosted URL uniformly, vs. keep a
+> separate local-stdio variant alongside the hosted one).
+
 ### Claude Code — `packages/claude/`
 
 Installed via the marketplace (`nrev-workflows@nrev`); `marketplace.json`'s
-`source` points at `./packages/claude`. `.mcp.json` launches the bundled server
-with `uv run --project ${CLAUDE_PLUGIN_ROOT}/mcp nrev-workflows-mcp`. On install,
-Claude copies the package into `~/.claude/plugins/cache/` and auto-discovers
-`skills/` + `.mcp.json`. See [repo README](../README.md) for install steps.
+`source` points at `./packages/claude`. On install, Claude copies the package
+into `~/.claude/plugins/cache/` and auto-discovers `skills/` + `.mcp.json`.
+See [repo README](../README.md) for install steps.
 
 ### Codex CLI / Codex app — `packages/codex/`
 
 Installed as a native Codex plugin (Codex ≥ 0.117). The repo-root
 `.agents/plugins/marketplace.json` points at `./packages/codex`;
-`.codex-plugin/plugin.json` declares `skills` and `mcpServers` (→ `.mcp.json`,
-which launches `bin/run-mcp.sh` via a relative path + `cwd`). Install:
+`.codex-plugin/plugin.json` declares `skills` and `mcpServers` (→ `.mcp.json`).
+Install:
 
 ```
 codex plugin marketplace add https://github.com/nurturev/nrev-mcp.git
@@ -219,12 +244,22 @@ Manual (no-plugin) fallback: copy `skills/` into `~/.agents/skills/` and add
 the `config.toml` block to `~/.codex/config.toml`. See
 [`packages/codex/README.md`](../packages/codex/README.md).
 
+**Unverified:** unlike Claude (proven end-to-end against a live Cowork
+connector), Codex's own support for a `type: "http"` remote `mcpServers`
+entry with OAuth hasn't been smoke-tested against a real Codex install —
+the earlier "smoke-tested end to end" note in the changelog was for the
+old local `bin/run-mcp.sh` launcher, before this change. Confirm against a
+real Codex install before relying on it.
+
 ### Gemini CLI — `packages/gemini/`
 
 `gemini extensions install ./packages/gemini` copies the extension into
 `~/.gemini/extensions/nrev-workflows/`; the `gemini-extension.json` manifest
 declares `mcpServers` and `contextFileName`, and `skills/` is auto-discovered.
 See [`packages/gemini/README.md`](../packages/gemini/README.md).
+
+**Unverified** for the same reason as Codex above — not smoke-tested
+against a real Gemini CLI install with the new hosted-URL config.
 
 ---
 

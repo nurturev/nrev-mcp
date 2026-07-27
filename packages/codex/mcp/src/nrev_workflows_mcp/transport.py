@@ -95,18 +95,27 @@ def _send(
     path: str,
     json_body: Optional[dict],
     params: Optional[dict],
+    files: Optional[dict] = None,
 ) -> httpx.Response:
+    headers = {
+        "Authorization": f"Bearer {token}",
+        # Client-source attribution for prod-alert triage (observability only).
+        "X-Nrev-Client": CLIENT_SOURCE,
+    }
+    # A multipart upload must let httpx set its own boundary Content-Type —
+    # a client-level application/json here would override it (httpx applies
+    # content-derived headers via setdefault) and break the upload.
+    if files is None:
+        headers["Content-Type"] = "application/json"
+    kwargs: dict = {"json": json_body, "params": params}
+    if files is not None:
+        kwargs["files"] = files
     with httpx.Client(
         base_url=host,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            # Client-source attribution for prod-alert triage (observability only).
-            "X-Nrev-Client": CLIENT_SOURCE,
-        },
+        headers=headers,
         timeout=httpx.Timeout(TIMEOUT_SECONDS),
     ) as client:
-        return client.request(method, path, json=json_body, params=params)
+        return client.request(method, path, **kwargs)
 
 
 def request(
@@ -115,9 +124,10 @@ def request(
     path: str,
     json_body: Optional[dict] = None,
     params: Optional[dict] = None,
+    files: Optional[dict] = None,
 ) -> Any:
     token = auth.get_jwt()
-    r = _send(host, token, method, path, json_body, params)
+    r = _send(host, token, method, path, json_body, params, files)
 
     # On a 401 the session token may have expired between the expiry check and
     # the request. Force a refresh and retry once. (A manual override has no
@@ -125,7 +135,7 @@ def request(
     if r.status_code == 401:
         new_token = auth.force_refresh()
         if new_token and new_token != token:
-            r = _send(host, new_token, method, path, json_body, params)
+            r = _send(host, new_token, method, path, json_body, params, files)
 
     if r.status_code >= 400:
         _maybe_raise_tenant_changed(host, r.status_code)
