@@ -31,10 +31,20 @@ def snap_row_limit(limit: int) -> int:
     return _ALLOWED_ROW_LIMITS[-1]
 
 
-def list_tables(name: Optional[str] = None, skip: int = 0, limit: int = 100) -> dict:
+def list_tables(
+    name: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    tag_ids: Optional[list[str]] = None,
+) -> dict:
     params: dict = {"skip": max(0, int(skip)), "limit": int(limit)}
     if name:
         params["name"] = name
+    if tag_ids:
+        # `tag_ids` (snake_case, no camelCase anywhere in this service, unlike
+        # workflow_studio) — OR-filter per commit history (#54 made it OR, not
+        # AND): a table matching ANY listed tag id is returned.
+        params["tag_ids"] = list(tag_ids)
     return request("GET", "/tables", params=params)
 
 
@@ -55,8 +65,37 @@ def rename_table(table_id: str, new_name: str) -> dict:
     return request("PATCH", f"/tables/{table_id}", json_body={"name": new_name})
 
 
+def set_table_tags(table_id: str, tag_ids: list[str]) -> dict:
+    """PATCH /tables/{id} with ONLY `tag_ids` set. Verified against
+    UpdateTableRequest: `name` and `tag_ids` are both optional (a model
+    validator requires at least one, but either alone is valid) — a tags-only
+    PATCH is a complete, correct call. Set-based: the full desired set, not
+    additive — `[]` detaches every tag."""
+    return request("PATCH", f"/tables/{table_id}", json_body={"tag_ids": list(tag_ids)})
+
+
 def delete_table(table_id: str) -> Any:
     return request("DELETE", f"/tables/{table_id}")
+
+
+def export_table_schema(table_id: str) -> dict:
+    """GET /tables/{id}/schema/export -> {schema: {...}, expression: "<json>"}.
+    `expression` is the ready-to-reuse pretty-printed JSON string (table_name,
+    columns, unique_constraints, and tags as portable {name,color} pairs, no
+    ids) — feed it straight into import_table_schema to clone a table's
+    schema (the "duplicate table" primitive; no dedicated duplicate endpoint
+    exists, this composition is it)."""
+    return request("GET", f"/tables/{table_id}/schema/export")
+
+
+def import_table_schema(expression: str) -> dict:
+    """POST /tables/schema/import body {"expression": "<json text>"} ->
+    creates a new, empty table (fresh ids throughout) from a schema
+    expression — the same shape export_table_schema returns. Table name
+    auto-suffixes on collision, same as POST /tables. Tags on the expression
+    are re-resolved by name via the UMS catalog (create-or-get) and attached
+    to the new table automatically."""
+    return request("POST", "/tables/schema/import", json_body={"expression": expression})
 
 
 def add_column(table_id: str, name: str, col_type: str, position: Optional[int] = None) -> dict:
@@ -98,6 +137,16 @@ def update_row(table_id: str, row_id: int, values: dict) -> dict:
     Same column_id-keyed `values` as add_row; PATCH semantics — only the listed
     cells change, others keep their value, and `null` clears a cell."""
     return request("PATCH", f"/tables/{table_id}/rows/{int(row_id)}", json_body={"values": values})
+
+
+def bulk_insert_rows(table_id: str, rows: list[dict]) -> dict:
+    """POST /tables/{table_id}/rows/bulk — insert up to MAX_ROWS_PER_BULK_INSERT
+    rows (500 as of writing) in one call. `rows` is a list of column_id-keyed
+    value dicts, same shape as add_row. Always 200s on a processed batch:
+    conforming rows commit, the rest come back in `rejected[]` (row_index +
+    reason + offending column_ids) — partial reject is data, not an error.
+    Used to copy row data when duplicating a table with include_rows=true."""
+    return request("POST", f"/tables/{table_id}/rows/bulk", json_body={"rows": rows})
 
 
 def bulk_delete_rows(table_id: str, row_ids: list[int]) -> dict:

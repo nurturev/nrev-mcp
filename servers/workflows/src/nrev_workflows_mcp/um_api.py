@@ -86,3 +86,33 @@ def update_entry(
 def delete_entry(entry_id: str, field_type: str) -> Any:
     # field_type is a required query param on the UM route.
     return request("DELETE", f"{_BASE}/entry/{entry_id}", params={"field_type": field_type})
+
+
+# ── tags (catalog) ───────────────────────────────────────────────────────────
+# The shared, tenant-scoped tag catalog both workflows and tables draw their
+# tag_ids from (domains/tags/router.py, prefix /tags). No DELETE in v1 —
+# removing a tag from a workflow/table only detaches the assignment
+# (set_workflow_tags / set_table_tags); the catalog tag persists.
+
+
+def list_tags() -> Any:
+    """GET /tags -> tag list for the caller's tenant, sorted by name."""
+    return request("GET", "/tags")
+
+
+def create_tag(name: str, color: str) -> Any:
+    """POST /tags -> the created tag. `color` is a 6-hex-digit string, no '#'.
+    409s (tags.name_collision) if a tag with this name (case-insensitive)
+    already exists in the tenant, with `details.existing_tag_id` — callers
+    wanting find-or-create should catch that and use the existing id rather
+    than treat it as a hard failure."""
+    return request("POST", "/tags", json_body={"name": name, "color": color})
+
+
+def update_tag(tag_id: str, name: Optional[str] = None, color: Optional[str] = None) -> Any:
+    """PATCH /tags/{id} -> the updated tag. Renames/recolors the tag
+    EVERYWHERE it's applied (one canonical tag per name per tenant)."""
+    body = {k: v for k, v in {"name": name, "color": color}.items() if v is not None}
+    if not body:
+        raise ValueError("update_tag needs at least one of name / color")
+    return request("PATCH", f"/tags/{tag_id}", json_body=body)

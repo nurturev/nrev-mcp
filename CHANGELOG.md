@@ -7,6 +7,40 @@ Claude Code uses for `/plugin update`).
 
 ## [Unreleased]
 
+## [1.1.0]
+
+### Added
+- **Table tags** (`tools_tables.py`, `tables_api.py`). `list_tables(tag_ids=...)`
+  (OR-filter), `set_table_tags` / `add_table_tag` / `remove_table_tag`.
+  `get_table` / `list_tables` now surface each table's `tag_ids`. The backend
+  (`nrev-tables-service`) already fully supported this (`table_tags` join,
+  embed, filter, set-write) — this release only adds the MCP layer on top.
+- **Workflow tags** (`tools_workflows.py`, `api.py`). `list_workflows(tag_ids=...)`
+  (AND-filter), `set_workflow_tags` / `add_workflow_tag` / `remove_workflow_tag`.
+  `get_workflow` now surfaces `tag_ids`. Same posture as table tags: the
+  backend (`workflow_studio`) already fully supported this in production —
+  MCP-layer-only addition.
+- **Tag catalog tools** (new `tools_tags.py`, `um_api.py`). `list_tags`,
+  `create_tag`, `update_tag`, and a `find_or_create_tag` convenience tool so a
+  tag can be addressed by name instead of by raw UUID. First nrev-mcp feature
+  to talk to user-management for something other than session refresh /
+  tenant listing / the knowledge base.
+- **`duplicate_table`** (`tools_tables.py`). Clones a table's schema (columns,
+  unique constraints, tags) into a new table; `include_rows=true` also copies
+  the row data. No dedicated backend endpoint exists for this — composed from
+  the existing schema export/import endpoints (+ paginated bulk-insert for
+  row data), matching the existing `duplicate_workflow` capability on the
+  tables side.
+- **`clear_table_rows`** (`tools_tables.py`). Deletes every row in a table
+  while keeping its schema intact. No dedicated backend "truncate" endpoint
+  exists — composed from the existing paginated row list + bulk-delete,
+  looped until the table is empty.
+- **"Run till here" clarified** (`api.py`, `tools_execution.py`). No backend
+  or behavior change — `run_node` already ran the full ancestor chain
+  (trigger through the target node) fresh whenever `prior_execution_id` was
+  omitted; the tool's docstring described it as an isolated single-node run
+  instead. Docs now state plainly what each mode does.
+
 ### Added
 - **Hosted OAuth connector** (`nrev-workflows-mcp-http`, `servers/workflows/server_http.py`
   + `oauth.py`). A streamable-http transport for remote-MCP-only clients

@@ -7,6 +7,7 @@ nodes (Query Table / Add Row / Update Row / Get Row).
 """
 from __future__ import annotations
 
+import json
 from typing import Optional
 
 from . import projections, tables_api, tenant
@@ -14,11 +15,17 @@ from .app import mcp
 
 
 @mcp.tool()
-def list_tables(search: Optional[str] = None, limit: int = 100, offset: int = 0) -> dict:
-    """List nRev tables in the tenant (id, name, columns). `search` matches
-    the table name. Use to find the table a workflow should read/write before
-    configuring an nrev_tables node."""
-    raw = tables_api.list_tables(name=search, skip=offset, limit=limit)
+def list_tables(
+    search: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+    tag_ids: Optional[list[str]] = None,
+) -> dict:
+    """List nRev tables in the tenant (id, name, columns, tag_ids). `search`
+    matches the table name. `tag_ids` filters to tables carrying ANY of the
+    listed tag ids (OR) — get ids from list_tags. Use to find the table a
+    workflow should read/write before configuring an nrev_tables node."""
+    raw = tables_api.list_tables(name=search, skip=offset, limit=limit, tag_ids=tag_ids)
     data = raw.get("data") if isinstance(raw, dict) else raw
     return {"tables": [projections.slim_table(t) for t in (data or []) if isinstance(t, dict)]}
 
@@ -71,6 +78,34 @@ def update_table(
 
 
 @mcp.tool()
+def set_table_tags(table_id: str, tag_ids: list[str]) -> dict:
+    """Set a table's tags to EXACTLY this list (converge, not additive) — `[]`
+    detaches every tag. Get tag ids from list_tags / find_or_create_tag. For
+    add/remove-one semantics use add_table_tag / remove_table_tag instead,
+    which read the current set for you."""
+    return projections.slim_table(tables_api.set_table_tags(table_id, tag_ids))
+
+
+@mcp.tool()
+def add_table_tag(table_id: str, tag_id: str) -> dict:
+    """Attach one tag to a table without disturbing its other tags (reads the
+    current tag_ids, adds this one, writes the full set back — the backend
+    itself has no additive primitive)."""
+    current = set(projections.slim_table(tables_api.get_table(table_id)).get("tag_ids") or [])
+    current.add(tag_id)
+    return projections.slim_table(tables_api.set_table_tags(table_id, sorted(current)))
+
+
+@mcp.tool()
+def remove_table_tag(table_id: str, tag_id: str) -> dict:
+    """Detach one tag from a table without disturbing its other tags (reads
+    the current tag_ids, drops this one, writes the full set back)."""
+    current = set(projections.slim_table(tables_api.get_table(table_id)).get("tag_ids") or [])
+    current.discard(tag_id)
+    return projections.slim_table(tables_api.set_table_tags(table_id, sorted(current)))
+
+
+@mcp.tool()
 def delete_table(table_id: str, confirm: bool = False) -> dict:
     """Delete a table and all its rows. Destructive — requires confirm=true,
     and you should name the table to the user before calling. (If the platform
@@ -80,6 +115,88 @@ def delete_table(table_id: str, confirm: bool = False) -> dict:
         raise ValueError("delete_table is destructive — call again with confirm=true")
     tables_api.delete_table(table_id)
     return {"deleted": table_id}
+
+
+@mcp.tool()
+def duplicate_table(table_id: str, new_name: Optional[str] = None, include_rows: bool = False) -> dict:
+    """Clone a table's schema (columns, unique constraints, tags) into a new
+    table. Schema-only by default — pass include_rows=true to also copy the
+    row data. Without new_name the platform auto-suffixes on a name collision
+    (same behavior as create_table), so the copy just gets "<name> 2" etc.
+
+    No dedicated backend endpoint exists for this — it's composed from
+    schema/export + schema/import (+ paginated row copy when include_rows is
+    set), so it may take a few seconds on a table with many rows/columns.
+    """
+    # New resource — no existing id for the backend to access-gate, so a
+    # mid-flight tenant switch would silently create this in the wrong tenant.
+    tenant.assert_pinned_active("duplicating a table")
+    exported = tables_api.export_table_schema(table_id)
+    expression = exported.get("expression") if isinstance(exported, dict) else None
+    if not expression:
+        raise ValueError(f"schema export for table {table_id} returned no expression")
+    if new_name:
+        parsed = json.loads(expression)
+        parsed["table_name"] = new_name
+        expression = json.dumps(parsed)
+    new_table = projections.slim_table(tables_api.import_table_schema(expression))
+    new_table_id = new_table.get("id")
+
+    rows_copied = 0
+    rows_failed = 0
+    if include_rows and new_table_id:
+        # Exclude system columns (row_id/added_at/last_updated_at) from the
+        # remap entirely — the backend 400s a bulk insert that includes any
+        # system-field column id (they're stamped server-side, per-table).
+        source_cols = projections.slim_table(tables_api.get_table(table_id)).get("columns") or []
+        new_cols = projections.slim_table(tables_api.get_table(new_table_id)).get("columns") or []
+        source_id_to_name = {
+            c["id"]: (c.get("name") or "").strip().lower()
+            for c in source_cols
+            if c.get("id") and not c.get("is_system")
+        }
+        new_name_to_id = {
+            (c.get("name") or "").strip().lower(): c["id"]
+            for c in new_cols
+            if c.get("id") and not c.get("is_system")
+        }
+        # Page size matches MAX_ROWS_PER_BULK_INSERT (500) 1:1 so each page
+        # maps to exactly one bulk_insert_rows call — list_rows only accepts
+        # 100/500/1000 anyway, and 1000 would 400 on the insert side.
+        skip, page = 0, 500
+        while True:
+            page_resp = tables_api.list_rows(table_id, skip=skip, limit=page)
+            rows = page_resp.get("data") if isinstance(page_resp, dict) else page_resp
+            if not rows:
+                break
+            batch = []
+            for row in rows:
+                values = row.get("values") if isinstance(row, dict) else None
+                if not isinstance(values, dict):
+                    continue
+                remapped = {}
+                for col_id, val in values.items():
+                    name = source_id_to_name.get(col_id)
+                    new_col_id = new_name_to_id.get(name) if name else None
+                    if new_col_id:
+                        remapped[new_col_id] = val
+                batch.append(remapped)
+            if batch:
+                result = tables_api.bulk_insert_rows(new_table_id, batch)
+                rejected = result.get("rejected") if isinstance(result, dict) else None
+                n_rejected = len(rejected) if isinstance(rejected, list) else 0
+                rows_copied += len(batch) - n_rejected
+                rows_failed += n_rejected
+            if len(rows) < page:
+                break
+            skip += page
+        new_table = projections.slim_table(tables_api.get_table(new_table_id))
+
+    out = dict(new_table)
+    if include_rows:
+        out["rows_copied"] = rows_copied
+        out["rows_failed"] = rows_failed
+    return out
 
 
 @mcp.tool()
@@ -207,6 +324,36 @@ def delete_table_rows(table_id: str, row_ids: list[int], confirm: bool = False) 
         "deleted_row_ids": deleted,
         "table": resp.get("table") if isinstance(resp, dict) else None,
     }
+
+
+@mcp.tool()
+def clear_table_rows(table_id: str, confirm: bool = False) -> dict:
+    """Delete ALL rows in a table, keeping its schema (columns) intact —
+    "empty this table out" without touching its structure. Destructive,
+    requires confirm=true; name the table to the user first.
+
+    No dedicated "clear"/"truncate" endpoint exists on the backend — this
+    pages through the table's rows and bulk-deletes them 1000 at a time until
+    none remain, so on a very large table (cap: 1,000,000 rows) this is many
+    sequential calls and may take a while. For "recreate this table empty"
+    instead (different table_id), use duplicate_table without include_rows
+    plus delete_table on the original.
+    """
+    if not confirm:
+        raise ValueError("clear_table_rows is destructive — call again with confirm=true")
+    total_deleted = 0
+    last_table_meta = None
+    while True:
+        page = tables_api.list_rows(table_id, skip=0, limit=1000)
+        rows = page.get("data") if isinstance(page, dict) else page
+        row_ids = [r.get("row_id") for r in (rows or []) if isinstance(r, dict) and r.get("row_id") is not None]
+        if not row_ids:
+            break
+        resp = tables_api.bulk_delete_rows(table_id, row_ids)
+        deleted = resp.get("deleted_row_ids") if isinstance(resp, dict) else None
+        total_deleted += len(deleted) if isinstance(deleted, list) else len(row_ids)
+        last_table_meta = resp.get("table") if isinstance(resp, dict) else None
+    return {"cleared": True, "rows_deleted": total_deleted, "table": last_table_meta}
 
 
 # ── Analytical reads — compute over a whole table WITHOUT pulling rows into

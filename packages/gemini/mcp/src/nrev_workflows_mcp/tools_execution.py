@@ -91,9 +91,18 @@ def run_workflow(
 
 @mcp.tool()
 def run_node(workflow_id: str, node_id: str, prior_execution_id: Optional[str] = None) -> dict:
-    """Execute a single node — the cheap, fast way to test one step while
-    building. With prior_execution_id (from an earlier run), upstream outputs
-    are reused from cache and only this node re-runs.
+    """Run a workflow from its trigger through this node ("run till here") —
+    or, given a prior run, just the not-yet-completed remainder.
+
+    - Omit prior_execution_id: runs the FULL chain fresh, trigger through
+      node_id, in one call — this is "run till here", not an isolated
+      single-node run. Use this the first time you test a node, or whenever
+      you want a clean end-to-end run up to a point.
+    - Pass prior_execution_id (from an earlier run of this workflow):
+      ancestors already completed in that run are skipped (their cached
+      output is reused) and only what's left re-runs — typically just the
+      node you changed, or everything downstream of a settings edit. Use
+      this to iterate cheaply after tweaking one node's settings.
 
     Returns the execution_id; follow with get_execution then
     get_node_output(workflow_id, execution_id, node_id).

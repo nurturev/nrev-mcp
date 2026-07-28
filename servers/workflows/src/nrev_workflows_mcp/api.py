@@ -40,10 +40,23 @@ def get_workflow(wf_id: str) -> dict:
     return request("GET", f"/workflows/{wf_id}")
 
 
-def list_workflows(limit: int = 20, offset: int = 0, search: Optional[str] = None) -> dict:
+def list_workflows(
+    limit: int = 20,
+    offset: int = 0,
+    search: Optional[str] = None,
+    tag_ids: Optional[list[str]] = None,
+) -> dict:
     params: dict = {"limit": int(limit), "skip": int(offset)}
     if search:
         params["name"] = search  # platform's filter param is `name`, not `search`
+    if tag_ids:
+        # Verified against workflow_builder_endpoints.py: this Query param has
+        # NO alias, so the wire key is `tag_ids` (snake_case) — unlike every
+        # tag_ids BODY field on this same platform (WorkflowResponse /
+        # WorkflowUpdateRequest), which aliases to `tagIds`. A real, confirmed
+        # inconsistency in the live API, not a doc error. AND-filter semantics
+        # (a workflow must carry every listed tag id).
+        params["tag_ids"] = list(tag_ids)
     return request("GET", "/workflows", params=params)
 
 
@@ -57,6 +70,14 @@ def create_workflow(name: str, description: str = "") -> dict:
 
 def put_workflow(wf_id: str, envelope: dict) -> dict:
     return request("PUT", f"/workflows/{wf_id}", json_body={"workflow_details": envelope})
+
+
+def set_workflow_tags(wf_id: str, tag_ids: list[str]) -> dict:
+    """PUT /workflows/{id} with ONLY `tagIds` set — verified against
+    WorkflowUpdateRequest (every field Optional, so a tags-only body is a
+    complete, valid partial update, no other fields required). Set-based: the
+    full desired set of tag ids, not additive — `[]` detaches every tag."""
+    return put_workflow(wf_id, {"tagIds": list(tag_ids)})
 
 
 def put_node(wf_id: str, node_id: str, node: dict) -> dict:
@@ -297,8 +318,22 @@ def update_workflow_and_execute(wf_id: str, node_id: str, envelope: dict) -> dic
 
 
 def execute_node(wf_id: str, node_id: str, prior_execution_id: Optional[str] = None) -> Any:
-    """Execute a single node; with prior_execution_id it reuses cached upstream
-    output and re-runs from this node forward."""
+    """POST /executions/workflow/{wf}/node/{node}/execute — "run till here".
+
+    Verified in workflow_studio's execution.py (_get_node_ids_to_run +
+    WorkflowsDB.get_all_ancestors): the backend always computes the FULL
+    ancestor set of `node_id` (trigger through this node), not just this node
+    in isolation. What `prior_execution_id` controls is whether already-
+    COMPLETED ancestors from that prior run get skipped (cache reuse) —
+
+    - Omit `prior_execution_id`: no prior run to reuse from, so every
+      ancestor runs fresh — the entire chain from the trigger through
+      `node_id`, in one call. This IS "run till here".
+    - Pass `prior_execution_id`: ancestors already COMPLETED in that run are
+      skipped (their cached output is reused); only the not-yet-run ones
+      (typically just `node_id` itself, or everything downstream of a
+      settings edit) actually execute.
+    """
     body: dict = {}
     if prior_execution_id:
         body["workflowExecutionId"] = prior_execution_id

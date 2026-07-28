@@ -55,6 +55,7 @@ def slim_workflow(wf: dict) -> dict:
         "status": wf.get("status"),
         "config_error": _pick(wf, "workflowConfigError", "workflow_config_error"),
         "is_runable": _pick(wf, "isRunable", "is_runable"),
+        "tag_ids": _pick(wf, "tagIds", "tag_ids", default=[]),
         "node_count": len(blocks),
         "nodes": [slim_block(b) for b in blocks],
     }
@@ -350,8 +351,14 @@ def slim_table(t: dict) -> dict:
         "id": _pick(t, "id", "table_id"),
         "name": t.get("name"),
         "row_count": _pick(t, "row_count", "rowCount"),
+        "tag_ids": t.get("tag_ids") or [],
         "columns": [
-            {"id": _pick(c, "id", "column_id"), "name": c.get("name"), "type": c.get("type")}
+            {
+                "id": _pick(c, "id", "column_id"),
+                "name": c.get("name"),
+                "type": c.get("type"),
+                "is_system": bool(c.get("is_system", False)),
+            }
             for c in cols
             if isinstance(c, dict)
         ],

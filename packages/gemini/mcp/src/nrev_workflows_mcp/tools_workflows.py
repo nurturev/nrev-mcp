@@ -41,12 +41,19 @@ def _persist(wf: dict, result: dict) -> None:
 
 
 @mcp.tool()
-def list_workflows(search: Optional[str] = None, limit: int = 20, offset: int = 0) -> dict:
-    """List the tenant's workflows (id, name, status, timestamps). `search` is
-    a substring match on the workflow name. Use to find an existing workflow
-    before creating a duplicate of something that already exists.
+def list_workflows(
+    search: Optional[str] = None,
+    limit: int = 20,
+    offset: int = 0,
+    tag_ids: Optional[list[str]] = None,
+) -> dict:
+    """List the tenant's workflows (id, name, status, timestamps, tag_ids).
+    `search` is a substring match on the workflow name. `tag_ids` filters to
+    workflows carrying EVERY listed tag id (AND) — get ids from list_tags.
+    Use to find an existing workflow before creating a duplicate of something
+    that already exists.
     """
-    raw = api.list_workflows(limit=limit, offset=offset, search=search)
+    raw = api.list_workflows(limit=limit, offset=offset, search=search, tag_ids=tag_ids)
     return raw if isinstance(raw, dict) else {"data": raw}
 
 
@@ -71,6 +78,34 @@ def get_workflow(workflow_id: str, view: str = "slim", node_id: Optional[str] = 
             raise ValueError(f"node {node_id} not found in workflow {workflow_id}")
         return block
     return projections.slim_workflow(wf)
+
+
+@mcp.tool()
+def set_workflow_tags(workflow_id: str, tag_ids: list[str]) -> dict:
+    """Set a workflow's tags to EXACTLY this list (converge, not additive) —
+    `[]` detaches every tag. Get tag ids from list_tags / find_or_create_tag.
+    For add/remove-one semantics use add_workflow_tag / remove_workflow_tag
+    instead, which read the current set for you."""
+    return projections.slim_workflow(api.set_workflow_tags(workflow_id, tag_ids))
+
+
+@mcp.tool()
+def add_workflow_tag(workflow_id: str, tag_id: str) -> dict:
+    """Attach one tag to a workflow without disturbing its other tags (reads
+    the current tag_ids, adds this one, writes the full set back — the
+    backend itself has no additive primitive)."""
+    current = set(projections.slim_workflow(api.get_workflow(workflow_id)).get("tag_ids") or [])
+    current.add(tag_id)
+    return projections.slim_workflow(api.set_workflow_tags(workflow_id, sorted(current)))
+
+
+@mcp.tool()
+def remove_workflow_tag(workflow_id: str, tag_id: str) -> dict:
+    """Detach one tag from a workflow without disturbing its other tags
+    (reads the current tag_ids, drops this one, writes the full set back)."""
+    current = set(projections.slim_workflow(api.get_workflow(workflow_id)).get("tag_ids") or [])
+    current.discard(tag_id)
+    return projections.slim_workflow(api.set_workflow_tags(workflow_id, sorted(current)))
 
 
 @mcp.tool()
