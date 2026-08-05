@@ -57,7 +57,10 @@ spending real credits.
 
 ## Skills (loaded on demand)
 
+- **nrev** — user-typed front door only (`/nrev`); preflight + path fork.
+  Never load this yourself — route via the descriptions below.
 - **nrev-build** — core protocol; load before touching any workflow tool
+- **nrev-data** — one-off data pull, no workflow
 - **node-settings** — load before configuring any node
 - **workflow-examples**, **nrev-fix**
 - **list-building**, **qualification-and-disqualification**, **research**,

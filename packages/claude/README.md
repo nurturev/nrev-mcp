@@ -5,16 +5,23 @@ Build, debug, and operate nRev workflows from any Claude session.
 - **69 MCP tools** — catalog discovery, batched graph editing, node
   configuration with live field options, validation, test execution, output
   inspection, listeners, tags, and nRev tables operations.
-- **14 skills** — three you can invoke directly, eleven Claude loads on its
+- **15 skills** — four you can invoke directly, eleven Claude loads on its
   own when the task calls for them.
 
-Three commands are exposed in the `/` menu:
+Four commands are exposed in the `/` menu:
 
 | Command | Use it when |
 |---|---|
+| `/nrev` | You're not sure which of the others you want |
 | `/nrev-build` | Build a new workflow or edit an existing one |
 | `/nrev-fix` | A run failed, a node errors, or validation is refused |
 | `/nrev-data` | You want data pulled once, right now, with no workflow |
+
+`/nrev` is the front door: it confirms sign-in and active tenant, then asks
+the one question that decides the path — do you need this once, or should it
+keep running? — and hands off. It's marked `disable-model-invocation: true`,
+so it costs nothing until you type it and never competes with Claude's own
+routing. The other three auto-invoke normally.
 
 The other eleven are reference material Claude pulls in automatically —
 `node-settings` and `workflow-examples` for graph construction;

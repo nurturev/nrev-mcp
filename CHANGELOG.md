@@ -7,6 +7,37 @@ Claude Code uses for `/plugin update`).
 
 ## [Unreleased]
 
+## [1.3.0]
+
+### Added
+- **`/nrev` front door** (`shared/skills/nrev/`). One command for users who
+  don't yet know whether they want `/nrev-build`, `/nrev-fix`, or
+  `/nrev-data`. It runs the preflight every path needs — `get_auth_status`
+  (+ `auth_login` if stale) and `get_active_tenant`, named out loud since
+  tenant is server-side state that can shift mid-session — then forks on the
+  single question that determines everything: once, or repeatedly? Then it
+  hands off. It routes; it does not execute.
+
+  Marked `disable-model-invocation: true`, which is deliberate and is the
+  inverse of the `user-invocable: false` used on the eleven reference skills.
+  That setting keeps the description **out of context entirely**, so `/nrev`
+  costs zero tokens until a human types it and can never compete with
+  description-matching for the same triggers. Claude already routes twice —
+  the always-on server INSTRUCTIONS in `app.py` force the one-off-vs-workflow
+  fork, and the skill descriptions match on their own — so a third
+  model-facing router would only pay two context loads to reach where one
+  would have landed. This gap was only ever a human one.
+
+  The skill also carries the two routing traps worth stating once: a cold
+  people/company search ("find me founders in India") is neither path — it
+  lives only in workflow search nodes, not the one-off catalog — and "every
+  week" or a few hundred entities is a workflow however it's phrased.
+
+### Changed
+- `shared/AGENTS.md` lists `nrev` with an explicit "never load this yourself"
+  note, and adds the previously-missing `nrev-data` entry.
+- `packages/claude/README.md` documents four slash commands and 15 skills.
+
 ## [1.2.0]
 
 ### Changed
