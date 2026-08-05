@@ -1,6 +1,7 @@
 ---
 name: list-building
 description: Use when the user wants to build a workflow that assembles a list of target entities — companies, people, LinkedIn posts, or jobs — from search criteria ("find me...", "build a list of...", "who are the...", or an ICP description without specific names or domains). Covers route selection, Apollo vs RocketReach search node choice, filter availability, and the fork-qualify-rejoin company qualification pattern.
+user-invocable: false
 ---
 
 # List Building

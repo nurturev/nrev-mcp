@@ -7,6 +7,40 @@ Claude Code uses for `/plugin update`).
 
 ## [Unreleased]
 
+## [1.2.0]
+
+### Changed
+- **Slash menu curated down to three commands.** The plugin ships 14 skills;
+  only `nrev-build`, `nrev-fix`, and `nrev-data` now appear in the `/` menu.
+  The other eleven carry `user-invocable: false` in their frontmatter, which
+  hides them from the menu while leaving model auto-invocation untouched —
+  their descriptions stay in context, so the cross-load chain
+  (`nrev-build` → `list-building` → `node-settings`) behaves exactly as before.
+  Note this is the *opposite* field from `disable-model-invocation`, which
+  would have dropped the descriptions from context and broken auto-loading.
+  `user-invocable` is a Claude Code extension to the Agent Skills standard;
+  `sync-agents.sh` fans it verbatim into the Codex and Gemini packages, where
+  it is an unknown key and ignored.
+- **The three menu skills renamed** for clarity, since a slash command is the
+  one place the name is the entire UI:
+  - `building-workflows` → `nrev-build`
+  - `troubleshooting` → `nrev-fix`
+  - `one-off-research` → `nrev-data`
+
+  These names are load-bearing beyond the directory: the server INSTRUCTIONS
+  in `app.py` reference `nrev-build` and `nrev-fix`, `run_data_tool`'s
+  docstring in `tools_data.py` references `nrev-data`, and five sibling skills
+  plus `shared/AGENTS.md` cross-reference all three. All updated in lockstep.
+
+### Fixed
+- Stale counts in user-facing copy: `packages/claude/README.md` claimed 27 MCP
+  tools and 8 skills, and the plugin/marketplace/codex manifest descriptions
+  claimed 44 tools. Actual is 69 registered `@mcp.tool` functions and 14
+  skills. The README now also documents which three are slash-invocable.
+- Bundled `uv.lock` files under `packages/*/mcp/` still declared
+  `nrev-workflows-mcp 1.0.0` against a 1.1.0 manifest — a stale copy from the
+  v1.1.0 release that `sync-agents.sh` had not been re-run to refresh.
+
 ## [1.1.0]
 
 ### Added

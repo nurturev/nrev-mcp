@@ -1,6 +1,7 @@
 ---
 name: provider-selection
 description: Use when deciding WHICH data provider or tool should serve a data need — Apollo vs RocketReach vs PredictLeads vs LinkedIn scraping vs Parallel Web vs Google — before running a one-off data tool or picking a workflow node. Covers the job-to-provider decision matrix, each provider's strengths and blind spots, and auto-route rules. For HOW to configure the chosen provider, load data-provider-quirks; for gap-filling across providers, load waterfall-enrichment.
+user-invocable: false
 ---
 
 # Provider selection
@@ -35,7 +36,7 @@ capability still exists as a workflow node.
 | Phone numbers | RocketReach | rocketreach enrich — best phone coverage (expensive) |
 | Search companies by revenue/funding/growth | RocketReach | rocketreach company search — filters Apollo lacks |
 | Enrich a company by domain | Apollo (company_data) | enrich_company — richest firmographics |
-| Google/SERP search | Google (serp) | web search with site:/tbs operators — see one-off-research playbook |
+| Google/SERP search | Google (serp) | web search with site:/tbs operators — see nrev-data playbook |
 | Scrape or extract content from known URLs | Parallel Web | markdown extraction; handles JS and PDFs |
 | AI web research / structured extraction | Parallel Web | natural-language objectives with citations |
 | Max-coverage email/phone waterfall | BetterContact | workflow-level managed waterfall — see waterfall-enrichment |
@@ -93,7 +94,7 @@ deep-research tiers get expensive — size the tier to the question.
 reviews, funding news, businesses that exist in no B2B database. Blind
 spots: unstructured results that need post-filtering; LinkedIn content is
 indexed with hours-to-days lag; query quality decides result quality (use the
-one-off-research playbook patterns).
+nrev-data playbook patterns).
 
 **BetterContact / Hunter / ZeroBounce / Instantly** — email waterfall,
 domain email discovery, validation, and sending respectively. These operate

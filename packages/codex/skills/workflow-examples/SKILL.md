@@ -1,6 +1,7 @@
 ---
 name: workflow-examples
-description: Complete, correctly-shaped reference builds for nRev workflows — the exact edit_workflow operations[] arrays and node settings for canonical patterns (linear enrich→qualify→write pipeline, Magic Node fan-in/join, listener-triggered research→notify). Load alongside building-workflows when assembling a workflow from scratch, to copy a known-good structure instead of inferring one. The type_ids shown are PLACEHOLDERS — always resolve real node_definition_ids via find_node/describe_node first.
+description: Complete, correctly-shaped reference builds for nRev workflows — the exact edit_workflow operations[] arrays and node settings for canonical patterns (linear enrich→qualify→write pipeline, Magic Node fan-in/join, listener-triggered research→notify). Load alongside nrev-build when assembling a workflow from scratch, to copy a known-good structure instead of inferring one. The type_ids shown are PLACEHOLDERS — always resolve real node_definition_ids via find_node/describe_node first.
+user-invocable: false
 ---
 
 # Workflow Examples

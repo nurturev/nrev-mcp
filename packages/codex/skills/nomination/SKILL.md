@@ -1,6 +1,7 @@
 ---
 name: nomination
 description: Use when the user wants specific entities selected from a qualified pool for action — "pick the best", "top 10", "who should I contact first", "the right person at each company", or recurring batch selection under capacity constraints ("we can only handle 50 this week"). Covers score-and-rank, persona gates, best-per-group comparative selection, and priority queues.
+user-invocable: false
 ---
 
 # Nomination

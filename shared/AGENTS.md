@@ -57,9 +57,9 @@ spending real credits.
 
 ## Skills (loaded on demand)
 
-- **building-workflows** — core protocol; load before touching any workflow tool
+- **nrev-build** — core protocol; load before touching any workflow tool
 - **node-settings** — load before configuring any node
-- **workflow-examples**, **troubleshooting**
+- **workflow-examples**, **nrev-fix**
 - **list-building**, **qualification-and-disqualification**, **research**,
   **content-generation**, **gtm-automations**, **nomination** — per objective
 

@@ -7,7 +7,7 @@ source; this doc is scoped to what needs to change **in workflow_studio**
 specifically (the embedded MCP server nrev-mcp federates at
 `<workflow_host>/mcp`). The corresponding nrev-mcp-side changes (error
 normalization, richer `list_data_tools` hints, doc fix) have already shipped
-in this repo (`tools_data.py`, `shared/skills/one-off-research/SKILL.md`) and
+in this repo (`tools_data.py`, `shared/skills/nrev-data/SKILL.md`) and
 are noted per issue below as client-side mitigation, not a substitute for the
 fixes here.
 
@@ -220,7 +220,7 @@ object vs. list-of-envelopes) isn't documented as its own contract anywhere.
   `fields`/`item_fields`, so *if* `tools/list` ever does start publishing the
   nested schema (item 1 above), nrev-mcp will show it to the agent
   automatically — no further client change needed once that ships.
-- The shipped `one-off-research` skill doc was corrected to the verified
+- The shipped `nrev-data` skill doc was corrected to the verified
   working shape and now explicitly warns that one-off tool settings can
   differ from the raw node-envelope shape documented for workflow building.
 

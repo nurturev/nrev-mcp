@@ -1,6 +1,7 @@
 ---
 name: waterfall-enrichment
 description: Use when one provider's enrichment left holes to fill — missing emails, phones, domains, or firmographics across a list — and the fix is trying a second provider on ONLY the gap rows ("fill in the missing emails", "we only got 60% coverage", "try another source for the rest"). Covers the gap-fill sequence for one-off data tools and the filter-branch-merge pattern for workflows, coalescing rules, and when to use BetterContact's managed waterfall instead.
+user-invocable: false
 ---
 
 # Waterfall enrichment (gap-filling)
@@ -37,7 +38,7 @@ fraction of the list; done wrong, you pay 2x for data you already had.
 
 ## One-off version (data tools)
 
-Standard estimate → approve → confirm loop from **one-off-research** applies
+Standard estimate → approve → confirm loop from **nrev-data** applies
 at every step:
 
 1. Run the primary provider's tool via `run_data_tool` on the whole list.
@@ -55,7 +56,7 @@ decides whether the residual gap is worth the second spend.
 
 ## Workflow version (recurring)
 
-Express the same logic as a graph (load **building-workflows** and
+Express the same logic as a graph (load **nrev-build** and
 **node-settings** to assemble it):
 
 ```

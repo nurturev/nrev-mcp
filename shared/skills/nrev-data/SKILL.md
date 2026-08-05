@@ -1,6 +1,6 @@
 ---
-name: one-off-research
-description: Use when the user wants data pulled RIGHT NOW, once, without building a workflow — "just get me the comments on this post", "what's the latest news on these companies", "who reacted to this", "pull their recent posts", "check what they're hiring for". Covers the list_data_tools → run_data_tool estimate/confirm loop, spend discipline, save_to_table persistence, error recovery, and the search-query playbook. If the user wants it recurring or at scale, hand over to building-workflows instead.
+name: nrev-data
+description: Use when the user wants data pulled RIGHT NOW, once, without building a workflow — "just get me the comments on this post", "what's the latest news on these companies", "who reacted to this", "pull their recent posts", "check what they're hiring for". Covers the list_data_tools → run_data_tool estimate/confirm loop, spend discipline, save_to_table persistence, error recovery, and the search-query playbook. If the user wants it recurring or at scale, hand over to nrev-build instead.
 ---
 
 # One-off data research
@@ -22,7 +22,7 @@ always discover with `list_data_tools`.**
 Pin down: the entity (which post? which companies — names or domains?), the
 fields the user actually needs, expected volume, and whether this is truly
 one-time. "Every week" / "whenever X happens" / hundreds of entities → this is
-a workflow; load **building-workflows** and build one instead.
+a workflow; load **nrev-build** and build one instead.
 
 ### 2. Check tenant context
 `get_knowledge_base` / `search_knowledge` may already hold the ICP,
@@ -103,7 +103,7 @@ before saving.
 
 ### 10. Offer the recurring upgrade
 If the result is useful, ask: "want this running on a schedule / on a
-trigger?" If yes, load **building-workflows** — the saved table becomes the
+trigger?" If yes, load **nrev-build** — the saved table becomes the
 workflow's seed or destination, and every one-off tool has a corresponding
 node, so the conversion is mechanical.
 

@@ -1,6 +1,7 @@
 ---
 name: gtm-automations
 description: Use when the user wants actions executed on entities — "update the CRM", "log to a sheet", "send connection requests", "notify on Slack" — or reactive triggers ("when a bounce happens", "when they reply"), rate-limited queues ("send 15 per day"), or results delivered back to a Slack thread. Covers system writes, event-driven listeners, queue-based drip processing, and interactive response delivery.
+user-invocable: false
 ---
 
 # GTM Automations

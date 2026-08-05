@@ -39,7 +39,7 @@ people/company SEARCH ("find me founders in India") and nothing there matches,
 that capability lives only in workflow search nodes — say so and let the user
 choose to build a search workflow, rather than silently building one.
 
-Protocol for building workflows (the `building-workflows` skill has the full
+Protocol for building workflows (the `nrev-build` skill has the full
 version — load it when asked to build or edit a workflow):
 1. Ensure the user is signed in: call get_auth_status; if unset/expired, call
    auth_login — it opens the user's browser to sign in once (auto-refreshes
@@ -66,7 +66,7 @@ version — load it when asked to build or edit a workflow):
 7. validate_workflow after every batch of changes.
 8. Test-run with run_workflow / run_node, then inspect get_execution and
    get_node_output — including row-level errors, which do NOT surface in the
-   node-level status. (When a run fails, the troubleshooting skill maps
+   node-level status. (When a run fails, the nrev-fix skill maps
    symptoms to fixes.)
 Executions consume tenant credits: keep nodes in test mode while iterating.
 A full run_workflow with live nodes is refused without confirm=true — use

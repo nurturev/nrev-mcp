@@ -1,6 +1,7 @@
 ---
 name: data-provider-quirks
 description: Per-provider gotchas that waste credits or return wrong data when missed — consult BEFORE writing settings for any run_data_tool call or provider-backed workflow node. Apollo's newline-domain string and two-step search-then-enrich, RocketReach's free-text employer traps and name-variant expansion, PredictLeads domain-keyed lookups, LinkedIn URN extraction and pagination-token pairing, Parallel Web extraction limits, Google operator rules, and email-verification status codes.
+user-invocable: false
 ---
 
 # Data provider quirks
@@ -131,7 +132,7 @@ node (node settings): same vendors underneath.
   `site:yelp.com` / `site:instagram.com` instead.
 - Results are noisy by design: `site:linkedin.com/posts (handle)` matches
   mentions, not just authorship — post-filter by parsing each result URL.
-- Full pattern playbook: see one-off-research.
+- Full pattern playbook: see nrev-data.
 
 ## Email verification (ZeroBounce / Hunter / BetterContact)
 

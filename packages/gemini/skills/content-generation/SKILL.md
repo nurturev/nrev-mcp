@@ -1,6 +1,7 @@
 ---
 name: content-generation
 description: Use when the user wants personalised written content produced per entity — "write me an email", "draft outreach", "generate talking points", "create a sequence", "write LinkedIn comments", multi-channel campaigns, or A/B variants. Covers the maker-checker pattern, template sourcing, cohort-to-template mapping, structured output schemas, and model selection.
+user-invocable: false
 ---
 
 # Content Generation

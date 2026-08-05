@@ -1,5 +1,5 @@
 ---
-name: building-workflows
+name: nrev-build
 description: Core protocol for building, editing, and debugging nRev workflows with the nrev-workflows MCP tools. Use whenever the user wants to create a workflow, modify an existing one, fix a broken one, or asks what the platform can automate. Load this BEFORE touching any workflow tools; load the domain skills (list-building, qualification-and-disqualification, research, content-generation, gtm-automations, nomination) for the specific objective, and node-settings before configuring any node.
 ---
 

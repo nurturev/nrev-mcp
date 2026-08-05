@@ -1,6 +1,7 @@
 ---
 name: node-settings
 description: Use whenever writing or editing the settings of any nRev workflow node — adding nodes via edit_workflow, template syntax, native-node settings shapes (LinkedIn Scraping, People/Company Data, nRev Tables, Ask AI), Pipedream field naming and Google Sheets CRUD, structured output, and model selection. Consult BEFORE configuring a node; the shapes here are verified against production.
+user-invocable: false
 ---
 
 # Node Settings

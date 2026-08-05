@@ -2,14 +2,28 @@
 
 Build, debug, and operate nRev workflows from any Claude session.
 
-- **27 MCP tools** — catalog discovery, batched graph editing, node
+- **69 MCP tools** — catalog discovery, batched graph editing, node
   configuration with live field options, validation, test execution, output
-  inspection, and essential nRev tables operations.
-- **8 skills** — the build protocol (`building-workflows`), verified node
-  settings shapes (`node-settings`), and six GTM domain playbooks ported from
-  NurtureV's internal workflow-builder agent: `list-building`,
-  `qualification-and-disqualification`, `research`, `content-generation`,
-  `gtm-automations`, `nomination`.
+  inspection, listeners, tags, and nRev tables operations.
+- **14 skills** — three you can invoke directly, eleven Claude loads on its
+  own when the task calls for them.
+
+Three commands are exposed in the `/` menu:
+
+| Command | Use it when |
+|---|---|
+| `/nrev-build` | Build a new workflow or edit an existing one |
+| `/nrev-fix` | A run failed, a node errors, or validation is refused |
+| `/nrev-data` | You want data pulled once, right now, with no workflow |
+
+The other eleven are reference material Claude pulls in automatically —
+`node-settings` and `workflow-examples` for graph construction;
+`list-building`, `qualification-and-disqualification`, `research`,
+`content-generation`, `gtm-automations`, `nomination` as GTM domain playbooks
+ported from NurtureV's internal workflow-builder agent; and
+`provider-selection`, `data-provider-quirks`, `waterfall-enrichment` for
+choosing and driving data providers. They are marked `user-invocable: false`
+so they stay out of the menu without losing auto-invocation.
 
 Install and auth: see the [repo README](../../README.md).
 

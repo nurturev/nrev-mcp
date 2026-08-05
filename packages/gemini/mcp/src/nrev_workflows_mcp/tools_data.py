@@ -277,7 +277,7 @@ async def run_data_tool(tool_name: str, settings: dict, confirm: bool = False) -
     Returns the tool's records under `result` on success. On failure this
     returns (never raises) `{"status": "error", "error_class", "message",
     "details"}` — `error_class` is one of INVALID_INPUT / VENDOR_ERROR /
-    CREDITS_EXHAUSTED / UNKNOWN; see the one-off-research skill for what to do
+    CREDITS_EXHAUSTED / UNKNOWN; see the nrev-data skill for what to do
     with each. Land successful results in an nRev Table with save_to_table so
     a workflow can consume them later.
     """

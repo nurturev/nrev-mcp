@@ -1,6 +1,7 @@
 ---
 name: qualification-and-disqualification
 description: Use when the user wants entities evaluated against criteria for a fit/unfit determination — "score these leads", "qualify against our ICP", "only companies that match", "filter to the good ones" — or removed on negative signals ("if they bounce", "when someone unsubscribes"). Covers binary and score-based AI evaluation, deterministic pre-filtering, multi-signal scoring, and event-driven disqualification.
+user-invocable: false
 ---
 
 # Qualification and Disqualification

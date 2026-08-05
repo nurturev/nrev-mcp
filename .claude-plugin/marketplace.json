@@ -5,11 +5,11 @@
   "plugins": [
     {
       "name": "nrev-workflows",
-      "description": "Build, debug, and operate nRev workflows — 44 task-oriented MCP tools plus domain skills ported from the internal workflow-builder agent. Browser sign-in with auto-refresh (JWT override for CI), no secrets bundled.",
+      "description": "Build, debug, and operate nRev workflows — 69 task-oriented MCP tools plus domain skills ported from the internal workflow-builder agent. Browser sign-in with auto-refresh (JWT override for CI), no secrets bundled.",
       "source": "./packages/claude",
       "category": "productivity",
       "keywords": ["nrev", "workflow", "gtm", "mcp"],
-      "version": "1.1.0"
+      "version": "1.2.0"
     }
   ]
 }

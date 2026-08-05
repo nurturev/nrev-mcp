@@ -1,6 +1,7 @@
 ---
 name: research
 description: Use when the user already has (or the workflow will produce) a list of known entities and wants multi-signal intelligence gathered about them — "research these companies", "check their hiring/tech/posts/news", or on-demand single-entity research triggered by a Slack message or webhook. Covers parallel swimlane architecture, the standardised event schema, Path B collapse, persona gating, and event convergence.
+user-invocable: false
 ---
 
 # Research
