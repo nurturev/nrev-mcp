@@ -31,11 +31,11 @@ nrev-mcp/
 │       │   ├── projections.py        # compact views of large API payloads
 │       │   ├── um_api.py             # user-management REST wrappers (tenancy + knowledge base)
 │       │   ├── tenant.py             # active-tenant pin + mid-session drift detection
-│       │   └── tools_*.py            # 57 MCP tools in 9 modules
+│       │   └── tools_*.py            # 69 MCP tools in 10 modules
 │       ├── Dockerfile                # image for the hosted (streamable-http) transport
 │       └── tests/                    # pure-logic unit tests (no network)
 ├── shared/                           # ⭐ single source of truth (edit here)
-│   ├── skills/                       # 10 SKILL.md domain skills (open format)
+│   ├── skills/                       # 15 SKILL.md domain skills (open format)
 │   └── AGENTS.md                     # always-on agent context (thin)
 ├── packages/                         # one uniform package per agent (committed)
 │   ├── claude/                       # Claude: .claude-plugin/ + .mcp.json + bin/ + skills/ + mcp/
@@ -48,13 +48,31 @@ nrev-mcp/
 
 ## Install (Claude Code)
 
+> **New here?** [`docs/quickstart.md`](docs/quickstart.md) walks the whole
+> path — install, sign in, first data pull — in about five minutes.
+
 ```
 /plugin marketplace add nurturev/nrev-mcp
 /plugin install nrev-workflows@nrev
 ```
 
-Prereqs: Python 3.10+ and [uv](https://docs.astral.sh/uv/) on `PATH` (uv
-fetches a suitable Python itself if none is present). Install uv:
+**No local runtime required.** Since v1.0.0 all three agent manifests point at
+the hosted prod connector (`.mcp.json` → `type: "http"`, `oauth: true`,
+`https://nrev-workflows-mcp.public.prod.nurturev.com/mcp`), so the installed
+plugin spawns no process — nothing to install, no Python, no uv. Restart the
+client after install; `/mcp` should show `nrev-workflows` (69 tools).
+
+Sign-in is the client's normal OAuth "Connect" prompt (`/mcp` → connect
+`nrev-workflows` if it doesn't appear on its own), relayed through the platform
+web app and refreshed automatically. The hosted entrypoint is
+`nrev-workflows-mcp-http` (`servers/workflows/server_http.py`); per-user
+sessions live in the Redis-backed store, so no credentials touch the client.
+
+Python 3.10+ and [uv](https://docs.astral.sh/uv/) are needed only for the **dev
+install** below, which runs the server locally from source. That path uses the
+local stdio transport and its own file-backed session
+(`~/.nrev-workflows/credentials`, chmod 600) via `auth_login` or
+`scripts/login.sh`; production by default, `NREV_ENV=staging` to switch.
 
 ```
 # macOS / Linux
@@ -62,25 +80,6 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # Windows (PowerShell) — or: winget install --id=astral-sh.uv
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
-
-Works on macOS, Linux, and native Windows: the plugin starts the server by
-invoking `uv` directly (`.mcp.json` → `uv run …`), not through a shell script,
-and `uv` ships as a native binary (no `.cmd` shim), so no `cmd /c` wrapper is
-needed. Restart Claude Code after install; `/mcp` should show `nrev-workflows`
-(57 tools).
-
-First use — sign in once: tell Claude *"log in to nrev workflows"* (the
-`auth_login` tool — cross-platform) or, on macOS/Linux with the repo cloned,
-run `scripts/login.sh`. A browser opens
-for Google sign-in; the session is saved to `~/.nrev-workflows/credentials`
-(chmod 600) and **refreshed automatically**, so you never paste a JWT.
-Production by default (`NREV_ENV=staging` to switch).
-
-A hosted, OAuth-authenticated variant (`nrev-workflows-mcp-http`, see
-`servers/workflows/server_http.py`) also exists for remote-MCP-only clients
-like Cowork, which can't spawn a local process — sign-in there is a normal
-"Connect" prompt in the client, reusing this same web app login under the
-hood. Staging-only for now; not yet a customer-facing install path.
 
 ### Dev install (this repo cloned locally)
 
@@ -105,7 +104,7 @@ no `servers/` sibling, so the marketplace-install path is unaffected by the OS.)
 > **Full architecture & maintenance guide:** [`docs/multi-agent-packaging.md`](docs/multi-agent-packaging.md).
 
 The MCP server is a standard **stdio** server, so it is client-agnostic — Codex
-and Gemini speak the same protocol as Claude Code. The 10 domain skills are in
+and Gemini speak the same protocol as Claude Code. The 15 domain skills are in
 the open **Agent Skills** (`SKILL.md`) format that Claude Code, Codex, and
 Gemini all read (same `name`/`description` frontmatter, same progressive
 disclosure). So skills and docs are authored **once** in `shared/` and fanned
@@ -173,18 +172,19 @@ entry point.
 | `NREV_TIMEOUT` | `60` | HTTP timeout (seconds) |
 | `NREV_DOWNLOAD_DIR` | `~/.nrev-mcp/downloads` | download_node_output target |
 
-## Tool surface (57)
+## Tool surface (69)
 
 | Group | Tools |
 |---|---|
 | Auth | `auth_login` (browser sign-in, auto-refresh), `get_auth_status` |
 | Tenant | `get_active_tenant` (which tenant work is anchored to + the ones the user can switch among; read-only — never switches) |
 | Discovery | `search_nodes`, `find_node` (intent-ranked search), `get_node_type`, `describe_node` (schema + live options in one call), `get_field_options`, `list_connections`, `connect_app` (mint the hosted OAuth URL for a new app account), `search_plays` |
-| Workflows | `list_workflows`, `get_workflow`, `create_workflow`, `duplicate_workflow`, `edit_workflow` (batched graph ops), `update_node_settings`, `manage_variables`, `set_workflow_live`, `get_workflow_live_status`, `export_workflow` (full JSON to a local file), `import_workflow` (from an export file) |
+| Workflows | `list_workflows`, `get_workflow`, `create_workflow`, `duplicate_workflow`, `edit_workflow` (batched graph ops), `update_node_settings`, `manage_variables`, `set_workflow_live`, `get_workflow_live_status`, `export_workflow` (full JSON to a local file), `import_workflow` (from an export file), `set_workflow_tags`, `add_workflow_tag`, `remove_workflow_tag` |
 | Execution | `validate_workflow`, `estimate_run_cost`, `run_workflow` (spend-gated), `run_node`, `get_execution` (with wait), `stop_execution`, `stop_node_execution`, `resume_execution`, `list_recent_executions` (global run history), `get_execution_stats`, `get_node_output`, `download_node_output`, `check_node_errors` |
 | Listeners | `activate_listener_test` (arm a webhook/trigger node), `get_listener_event` (poll for the captured payload), `deactivate_listener` |
 | One-off data | `list_data_tools` (federated live from the workflow_studio MCP server), `run_data_tool` (server-enforced spend gate: confirm=false returns a credit estimate), `save_to_table` (land results in an nRev Table, creating it if needed) |
-| Tables | `list_tables`, `get_table`, `create_table`, `update_table`, `delete_table`, `get_table_rows`, `add_table_rows`, `update_table_rows`, `delete_table_rows`, `aggregate_table`, `get_distinct_values`, `join_tables` |
+| Tables | `list_tables`, `get_table`, `create_table`, `update_table`, `delete_table`, `duplicate_table`, `get_table_rows`, `add_table_rows`, `update_table_rows`, `delete_table_rows`, `clear_table_rows`, `aggregate_table`, `get_distinct_values`, `join_tables`, `set_table_tags`, `add_table_tag`, `remove_table_tag` |
+| Tags | `list_tags`, `create_tag`, `update_tag`, `find_or_create_tag` (address a tag by name instead of raw UUID) |
 | Knowledge base | `search_knowledge` (ranked retrieval), `get_knowledge_base` (full read + gaps), `save_knowledge` (reconciling merge upsert), `forget_knowledge` (guarded delete) |
 
 Design notes:

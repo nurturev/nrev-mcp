@@ -7,6 +7,38 @@ Claude Code uses for `/plugin update`).
 
 ## [Unreleased]
 
+### Added
+- **`docs/quickstart.md`** — install → connect → first pull → scale, written
+  for an end user rather than a maintainer: no tool counts, no transport
+  details, no tool names. Covers Claude Code, Claude Cowork, Codex, and
+  Gemini, the `/nrev` front door and when to skip it, and three starter
+  prompts that work with no setup beyond signing in.
+
+  The Cowork section documents the org-level path (Organization settings →
+  Plugins → Add plugin → GitHub) and states plainly that personal Cowork
+  accounts have no add-by-URL flow yet, so users on one don't burn time on a
+  dialog that can't work.
+
+  The starter prompts are deliberately scoped to what the one-off catalog
+  actually serves **today** — LinkedIn activity and company signals. Contact
+  enrichment, people search, web search, and scraping are later tranches, and
+  cold people search is workflow-only, so a "find a verified work email"-style
+  example would have failed on a new install. Called out explicitly rather
+  than left for users to discover.
+
+### Fixed
+- **Root README described the wrong install path.** It still documented the
+  plugin as spawning a local server via `uv run`, with Python + uv as
+  prerequisites and a `~/.nrev-workflows/credentials` sign-in. Since 72c15a7
+  all three agent manifests point at the hosted prod connector
+  (`type: "http"`, `oauth: true`), so an installed plugin spawns nothing and
+  needs no local runtime — sign-in is the client's OAuth prompt. uv is now
+  documented as a dev-install-only prerequisite, which is what it actually is.
+- Stale counts in the root README: `57` MCP tools → `69`, `9` tool modules →
+  `10`, `10` skills → `15`. The tool-surface table was also missing the entire
+  Tags group and six table/workflow tag tools added in 1.1.0, plus
+  `duplicate_table` and `clear_table_rows`.
+
 ## [1.3.0]
 
 ### Added
